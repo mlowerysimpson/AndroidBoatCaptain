@@ -1,0 +1,4 @@
+#Thu Mar 21 08:30:23 ADT 2019
+base.0=/Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/build/intermediates/transforms/dexMerger/debug/10
+path.0=classes.dex
+renamed.0=classes.dex

@@ -1,0 +1,27 @@
+<resources>
+
+    <string name="app_name">BoatCaptain</string>
+    <string name="boat_ip_label">Boat IP Address</string>
+    <string name="net_connect">Connect</string>
+    <string name="bluetooth_connect">Bluetooth Connect</string>
+    <string name="internet_bridge">Internet bridge</string>
+    <string name="status_text">Status</string>
+    <string name="ble_not_supported">Sorry, it looks like Bluetooth Low Energy (BLE) is not supportd on this device. You will not be able to use the remote control box to talk to AMOS, but can still talk to AMOS through a network server.</string>
+    <string name="ble_connecting">Connecting to AMOS REMOTE over Bluetooth...</string>
+    <string name="ble_connected">Connected to AMOS_REMOTE over Bluetooth."</string>
+    <string name="ble_disconnected">Disconnected from AMOS_REMOTE."</string>
+    <string name="error_ble_notconnected">Error, not connected to AMOS_REMOTE Bluetooth Low Energy (BLE) server.</string>
+    <string name="error_initializing_write">Error initializing write to AMOS_REMOTE.</string>
+    <string name="error_could_not_get_characteristic">Error could not get Bluetooth Gatt characteristic.</string>
+    <string name="error_discovering_services">Error trying to discover Bluetooth services.</string>
+    <string name="error_sending_command_bytes">"Error sending command bytes.</string>
+    <string name="error_setting_characteristic">Error setting characteristic value.</string>
+    <string name="error_reading_characteristic">Error reading characteristic value.</string>
+    <string name="invalid_response">Error invalid response to command.</string>
+    <string name="could_not_create_data">Error unable to create data structure.</string>
+    <string name="unexpected_datasize">Error unexpected data size.</string>
+    <string name="not_enough_bytes">Error did not read in enough bytes.</string>
+
+
+
+</resources>

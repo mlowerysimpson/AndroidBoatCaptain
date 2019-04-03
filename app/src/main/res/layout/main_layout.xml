@@ -1,0 +1,236 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/activity_main_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:paddingBottom="@dimen/activity_vertical_margin"
+    android:paddingLeft="@dimen/activity_horizontal_margin"
+    android:paddingRight="@dimen/activity_horizontal_margin"
+    android:paddingTop="@dimen/activity_vertical_margin"
+    tools:context=".MainActivity" >
+    
+ <Switch
+    android:id="@+id/use_bluetooth"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_alignParentLeft="true"
+    android:layout_alignParentTop="true"
+    android:textColor="@color/white1"
+    android:text="Use RC Box:" />
+<TextView
+	   android:id="@+id/boat_ipaddress_label"
+	   android:layout_width="wrap_content"
+	   android:layout_height="wrap_content"
+	   android:layout_alignLeft="@+id/use_bluetooth"
+	   android:layout_below="@+id/use_bluetooth"
+ 	   android:layout_marginTop="5dp"
+	   android:textColor="@color/white1"
+	   android:text="@string/boat_ip_label" />
+
+<EditText
+        android:id="@+id/et_ipaddr"
+        android:layout_width="160dp"
+        android:layout_height="wrap_content"
+        android:ems="10"
+        android:layout_alignLeft="@+id/boat_ipaddress_label"
+        android:layout_below="@+id/boat_ipaddress_label"
+        android:layout_marginTop="3dp"
+        android:background="@color/white1"
+        android:inputType="number|numberDecimal"
+        android:digits="0123456789."
+        android:imeOptions="actionDone"
+        />
+
+<Button
+        android:id="@+id/network_connect_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_toRightOf="@+id/et_ipaddr"
+        android:layout_alignBottom="@+id/et_ipaddr"
+        android:layout_marginLeft="3dp"
+        android:text="@string/net_connect"
+        android:background="@drawable/buttonbackground" />
+
+<Button
+		android:id="@+id/status_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/network_connect_button"
+        android:layout_alignLeft="@+id/network_connect_button"
+        android:layout_marginTop="10dp"
+        android:text="@string/status_text"
+        android:background="@drawable/buttonbackground" />
+
+<TextView
+	   android:id="@+id/gps_location"
+	   android:layout_width="wrap_content"
+	   android:layout_height="wrap_content"
+ 	   android:layout_alignLeft="@+id/et_ipaddr"
+ 	   android:layout_below="@+id/status_button"
+	   android:layout_marginTop="2dp"
+	   android:textColor="@color/white1"
+	   android:text="" />
+
+<TextView
+	   android:id="@+id/compass_data"
+	   android:layout_width="wrap_content"
+	   android:layout_height="wrap_content"
+ 	   android:layout_alignLeft="@+id/gps_location"
+ 	   android:layout_below="@+id/gps_location"
+	   android:layout_marginTop="3dp"
+	   android:textColor="@color/white1"
+	   android:text="" />
+
+<TextView
+    	android:id="@+id/diagnostics_data"
+    	android:layout_width="wrap_content"
+    	android:layout_height="wrap_content"
+    	android:layout_alignLeft="@+id/compass_data"
+    	android:layout_below="@+id/compass_data"
+    	android:layout_marginTop="3dp"
+    	android:textColor="@color/white1"
+	   android:text="" />
+  
+<TextView
+       android:id="@+id/status_text"
+	   android:layout_width="wrap_content"
+	   android:layout_height="wrap_content"
+ 	   android:layout_alignLeft="@+id/diagnostics_data"
+ 	   android:layout_below="@+id/diagnostics_data"
+	   android:layout_marginTop="3dp"
+	   android:textColor="@color/white1"
+	   android:text="" />
+
+<TextView 
+       android:id="@+id/prop_speed_text"
+	   android:layout_width="80dp"
+	   android:layout_height="wrap_content"
+ 	   android:layout_alignParentRight="true"
+ 	   android:layout_below="@+id/status_text"
+	   android:layout_marginTop="5dp"
+	   android:textColor="@color/white1"
+	   android:text="Speed:" />
+    />
+    
+<TextView
+       android:id="@+id/rudder_angle_text"
+	   android:layout_width="80dp"
+	   android:layout_height="wrap_content"
+ 	   android:layout_toLeftOf="@+id/prop_speed_text"
+ 	   android:layout_alignTop="@+id/prop_speed_text"
+ 	   android:layout_marginRight="5dp"
+	   android:textColor="@color/white1"
+	   android:text="R. Angle:" />
+    />
+    
+<ProgressBar
+       android:id="@+id/rudder_angle_progress"
+       style="?android:attr/progressBarStyleHorizontal"
+       android:layout_width="80dp"
+       android:layout_height="15dp"
+       android:layout_alignLeft="@+id/rudder_angle_text"
+       android:layout_below="@+id/rudder_angle_text"
+       android:layout_marginTop="5dp" 
+       android:visibility="invisible"
+       android:progressDrawable="@drawable/greenprogress"/>
+
+<ProgressBar
+       android:id="@+id/prop_speed_progress"
+       style="?android:attr/progressBarStyleHorizontal"
+       android:layout_width="80dp"
+       android:layout_height="15dp"
+       android:layout_alignLeft="@+id/prop_speed_text"
+       android:layout_below="@+id/prop_speed_text"
+       android:layout_marginTop="5dp" 
+       android:visibility="invisible"
+       android:progressDrawable="@drawable/greenprogress"/>
+
+<Button 
+    	android:id="@+id/forwards_button"
+    	android:layout_width="30dp"
+    	android:layout_height="30dp"
+    	android:layout_toRightOf="@+id/rudder_angle_progress"
+    	android:layout_below="@+id/rudder_angle_progress"
+    	android:layout_marginTop="10dp"
+    	android:text=""
+    	android:drawableLeft="@drawable/uparrow"
+    	android:paddingLeft="6dp"
+    	android:background="@drawable/buttonbackground"		
+    />
+
+<Button 
+    	android:id="@+id/right_button"
+    	android:layout_width="30dp"
+    	android:layout_height="30dp"
+    	android:layout_toRightOf="@+id/forwards_button"
+    	android:layout_below="@+id/forwards_button"
+    	android:layout_marginTop="2dp"
+    	android:layout_marginLeft="10dp"
+    	android:text=""
+    	android:drawableLeft="@drawable/rightarrow"
+    	android:paddingLeft="6dp"
+    	android:background="@drawable/buttonbackground"		
+    />
+
+<Button 
+    	android:id="@+id/left_button"
+    	android:layout_width="30dp"
+    	android:layout_height="30dp"
+    	android:layout_toLeftOf="@+id/forwards_button"
+    	android:layout_below="@+id/forwards_button"
+    	android:layout_marginTop="2dp"
+    	android:layout_marginRight="10dp"
+    	android:text=""
+    	android:drawableLeft="@drawable/leftarrow"
+    	android:paddingLeft="6dp"
+    	android:background="@drawable/buttonbackground"		
+    />
+
+<Button
+		android:id="@+id/back_button"
+    	android:layout_width="30dp"
+    	android:layout_height="30dp"
+    	android:layout_alignLeft="@+id/forwards_button"
+    	android:layout_below="@+id/left_button"
+    	android:layout_marginTop="2dp"
+       	android:text=""
+    	android:drawableLeft="@drawable/downarrow"
+    	android:paddingLeft="6dp"
+    	android:background="@drawable/buttonbackground"		
+    />
+
+<Button
+		android:id="@+id/stop_button"
+    	android:layout_width="60dp"
+    	android:layout_height="60dp"
+    	android:layout_alignLeft="@+id/et_ipaddr"
+    	android:layout_below="@+id/rudder_angle_text"
+    	android:layout_marginTop="3dp"
+      	android:text=""
+    	android:background="@drawable/stopsign"
+   />	
+
+<Button
+    	android:id="@+id/home_button"
+    	android:layout_width="60dp"
+    	android:layout_height="60dp"
+    	android:layout_toRightOf="@+id/stop_button"
+    	android:layout_marginLeft="12dp"
+    	android:layout_alignTop="@+id/stop_button"
+      	android:text=""
+    	android:background="@drawable/house"
+    />
+
+<Button
+    	android:id="@+id/camera_button"
+    	android:layout_width="60dp"
+    	android:layout_height="60dp"
+    	android:layout_alignLeft="@+id/stop_button"
+    	android:layout_below="@+id/stop_button"
+    	android:layout_marginTop="10dp"
+    	android:text=""
+    	android:background="@drawable/camera"
+    />
+
+</RelativeLayout>

@@ -1,0 +1,114 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:1:1-32:12
+INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:1:1-32:12
+INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:1:1-32:12
+INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:1:1-32:12
+MERGED from [com.android.support:support-v4:21.0.3] /Users/murraysimpson/.gradle/caches/transforms-1/files-1.1/support-v4-21.0.3.aar/6c6f5ac430626303c90268740ecf3c06/AndroidManifest.xml:14:4-17:12
+INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:1:1-32:12
+INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:1:1-32:12
+INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:1:1-32:12
+	package
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:2:5-38
+		INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
+		INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
+	android:versionName
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:4:5-30
+		INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
+		INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:1:11-69
+	android:versionCode
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:3:5-28
+		INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
+		INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
+uses-feature#android.hardware.bluetooth
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:6:5-63
+	android:name
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:6:19-60
+uses-permission#android.permission.BLUETOOTH
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:8:5-68
+	android:name
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:8:22-65
+uses-permission#android.permission.BLUETOOTH_ADMIN
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:9:2-71
+	android:name
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:9:19-68
+uses-permission#android.permission.WRITE_EXTERNAL_STORAGE
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:10:2-78
+	android:name
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:10:19-75
+uses-permission#android.permission.READ_EXTERNAL_STORAGE
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:11:2-77
+	android:name
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:11:19-74
+uses-permission#android.permission.INTERNET
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:12:2-63
+	android:name
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:12:19-61
+uses-permission#android.permission.ACCESS_NETWORK_STATE
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:13:2-75
+	android:name
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:13:19-73
+uses-permission#android.permission.ACCESS_COARSE_LOCATION
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:14:2-77
+	android:name
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:14:19-75
+uses-permission#android.permission.ACCESS_FINE_LOCATION
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:15:5-79
+	android:name
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:15:22-76
+application
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:17:5-30:19
+MERGED from [com.android.support:support-v4:21.0.3] /Users/murraysimpson/.gradle/caches/transforms-1/files-1.1/support-v4-21.0.3.aar/6c6f5ac430626303c90268740ecf3c06/AndroidManifest.xml:16:5-19
+MERGED from [com.android.support:support-v4:21.0.3] /Users/murraysimpson/.gradle/caches/transforms-1/files-1.1/support-v4-21.0.3.aar/6c6f5ac430626303c90268740ecf3c06/AndroidManifest.xml:16:5-19
+	android:label
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:20:9-41
+	android:icon
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:19:9-45
+	android:allowBackup
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:18:9-35
+	android:theme
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:21:9-40
+activity#com.example.boatcaptain.MainActivity
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:22:9-28:20
+	android:screenOrientation
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:22:78-114
+	android:launchMode
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:22:48-77
+	android:name
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:22:19-47
+intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:23:13-26:29
+action#android.intent.action.MAIN
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:24:17-69
+	android:name
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:24:25-66
+category#android.intent.category.LAUNCHER
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:25:17-77
+	android:name
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:25:27-74
+activity#com.example.boatcaptain.ImageCapActivity
+ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:29:9-134
+	android:screenOrientation
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:29:87-121
+	android:label
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:29:52-86
+	android:name
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml:29:19-51
+uses-sdk
+INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
+INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
+MERGED from [com.android.support:support-v4:21.0.3] /Users/murraysimpson/.gradle/caches/transforms-1/files-1.1/support-v4-21.0.3.aar/6c6f5ac430626303c90268740ecf3c06/AndroidManifest.xml:15:5-42
+MERGED from [com.android.support:support-v4:21.0.3] /Users/murraysimpson/.gradle/caches/transforms-1/files-1.1/support-v4-21.0.3.aar/6c6f5ac430626303c90268740ecf3c06/AndroidManifest.xml:15:5-42
+INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
+INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
+		INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
+		ADDED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
+		INJECTED from /Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/src/main/AndroidManifest.xml
