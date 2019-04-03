@@ -25,11 +25,13 @@ public class Captain {
 	protected int []m_sensorTypes;//the types of sensors that the boat has available, see SensorDataFile.h for a list of the supported sensor types
 	public String m_sLastError;//string describing the last network error that occurred
 	public int m_nNumImageBytes;//the number of image bytes saved by the boat that are available for download
+	private long m_lastIncrDecrTime;//the time (in ms) when a quantity was last incremented or decremented
 	
 	private PROPELLER_STATE m_currentPropState;//the current state of the propellers
 	private SimpleDateFormat m_dateFormat;
 	
 	Captain() {
+		m_lastIncrDecrTime = 0;
 		m_nNumImageBytes = 0;
 		m_bLeakDetected = false;
 		m_bSolarAvailable = false;
@@ -225,7 +227,7 @@ public class Captain {
 		float fRudderAngle = m_currentPropState.fRudderAngle;
 		float fPropSpeed = m_currentPropState.fPropSpeed;
 		
-		fRudderAngle++;
+		fRudderAngle = Increment(fRudderAngle);
 		if (fRudderAngle>PROPELLER_STATE.MAX_ANGLE) {
 			fRudderAngle = PROPELLER_STATE.MAX_ANGLE;
 		}
@@ -238,7 +240,7 @@ public class Captain {
 		float fRudderAngle = m_currentPropState.fRudderAngle;
 		float fPropSpeed = m_currentPropState.fPropSpeed;
 	
-		fRudderAngle--;
+		fRudderAngle = Decrement(fRudderAngle);
 		if (fRudderAngle<PROPELLER_STATE.MIN_ANGLE) {
 			fRudderAngle=PROPELLER_STATE.MIN_ANGLE;	
 		}
@@ -307,6 +309,44 @@ public class Captain {
 	public String FormatVoltageData() {
 		String sVoltage = String.format("Voltage: %.2f V", this.m_fBatteryVoltage);
 		return sVoltage;
+	}
+
+	private float Increment(float fVal) {//increments a value, but does so in an accelerated fashion if the same function has been called recently, i.e. within the last 2 seconds
+		boolean bRecentlyChanged = false;
+		long currentTime = System.currentTimeMillis();
+		if (m_lastIncrDecrTime>0) {
+			long lTimeElapsed = currentTime - m_lastIncrDecrTime;
+			if (lTimeElapsed<2000) {
+				bRecentlyChanged = true;
+			}
+		}
+		float fIncrementVal = 1;
+		if (bRecentlyChanged) {//increment value instead by 25% of its current value (if that is bigger than 1)
+			if (Math.abs(fVal/4)>fIncrementVal) {
+				fIncrementVal = Math.abs(fVal/4);
+			}
+		}
+		m_lastIncrDecrTime = currentTime;
+		return fVal + fIncrementVal;
+	}
+
+	private float Decrement(float fVal) {//decrements a value, but does so in an accelerated fashion if the same function has been called recently, i.e. within the last 2 seconds
+		boolean bRecentlyChanged = false;
+		long currentTime = System.currentTimeMillis();
+		if (m_lastIncrDecrTime>0) {
+			long lTimeElapsed = currentTime - m_lastIncrDecrTime;
+			if (lTimeElapsed<2000) {
+				bRecentlyChanged = true;
+			}
+		}
+		float fDecrementVal = 1;
+		if (bRecentlyChanged) {//decrement value instead by 25% of its current value (if that is bigger than 1)
+			if (Math.abs(fVal/4)>fDecrementVal) {
+				fDecrementVal = Math.abs(fVal/4);
+			}
+		}
+		m_lastIncrDecrTime = currentTime;
+		return fVal - fDecrementVal;
 	}
 }
 

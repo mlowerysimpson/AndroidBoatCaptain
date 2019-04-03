@@ -5,24 +5,24 @@
     build-mode="COLD"
     density="hdpi"
     format="10"
-    ir-eligibility="FIELD_TYPE_CHANGE"
+    ir-eligibility="FIELD_ADDED"
     plugin-version="3.3.2"
-    timestamp="1554298652051"
+    timestamp="1554302021140"
     token="5268843285670466352"
     verifier="COLD_SWAP_REQUESTED" >
 
     <task
         name="javac"
-        duration="1300" />
+        duration="935" />
     <task
         name="instant-run-dex"
         duration="0" />
     <task
         name="instant-run-transform"
-        duration="212" />
+        duration="109" />
     <task
         name="verifier"
-        duration="67" />
+        duration="113" />
 
     <artifact
         location="/Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/build/intermediates/split-apk/debug/slices/slice_1.apk"
@@ -76,6 +76,15 @@
         build-mode="COLD"
         ir-eligibility="FIELD_TYPE_CHANGE"
         timestamp="1554298652051"
+        verifier="COLD_SWAP_REQUESTED" >
+        <artifact
+            location="/Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/build/intermediates/instant-run-apk/debug/app-debug.apk"
+            type="SPLIT_MAIN" />
+    </build>
+    <build
+        build-mode="COLD"
+        ir-eligibility="FIELD_ADDED"
+        timestamp="1554302021140"
         verifier="COLD_SWAP_REQUESTED" >
         <artifact
             location="/Users/murraysimpson/Documents/Computer_Programs/AndroidBoatCaptain/BoatCaptain/app/build/intermediates/split-apk/debug/slices/slice_1.apk"
