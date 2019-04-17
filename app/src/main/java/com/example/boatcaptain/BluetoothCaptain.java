@@ -10,8 +10,14 @@ import android.content.Context;
 import android.content.IntentFilter;
 import android.util.Log;
 
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.UUID;
 import java.util.Vector;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+import static com.example.boatcaptain.MainActivity.STATUS_MODE;
 
 
 public class BluetoothCaptain extends Captain {
@@ -26,6 +32,8 @@ public class BluetoothCaptain extends Captain {
 	private BluetoothGattCharacteristic m_characteristic=null;//the Bluetooth Gatt characteristic that is used for the actual reading and writing of data with the AMOS_REMOTE device
 	private byte [] m_readBytes;//the bytes that are read in over the local Bluetooth connection
 	private int m_nImageBytesOffset = 0;//offset into m_readBytes where a group of image bytes starts
+	private Timer m_timeoutTimer;
+	private ReentrantLock m_commandLock;//used for controlling access to m_commands vector
 	BluetoothCaptain(Context context) {
 		//initialize commands vector
 		m_commands = new Vector<REMOTE_COMMAND>();
@@ -33,6 +41,8 @@ public class BluetoothCaptain extends Captain {
 		m_context = context;
 		m_pBoatData = null;
 		m_readBytes = null;
+		m_timeoutTimer=null;
+		m_commandLock = new ReentrantLock();
 		m_nImageBytesOffset = 0;
 	}
 
@@ -156,17 +166,22 @@ public class BluetoothCaptain extends Captain {
 	*/
 
 	private boolean AddCommand(REMOTE_COMMAND rc) {//add a command to the list of commands to send, if it is the only command, then send it right away
+		m_timeoutTimer = new Timer();
+		m_timeoutTimer.schedule(new TimerTask() {
+			@Override
+			public void run() {
+				TimeoutMethod();
+			}
+		}, REMOTE_COMMAND.ITMEOUT_TIME_MS);// launch singleshot timer function in REMOTE_COMMAND.TIMEOUT_TIME_MS ms
+		m_commandLock.lock();
 		m_commands.addElement(rc);
-		//test
-		int nNumElements = m_commands.size();
-		String sTest = String.format("nNumElements = %d\n",nNumElements);
-		Log.d("debug",sTest);
-		//end test
-		if (!m_bSendingCommand) {//send out a comand now
+		if (!m_bSendingCommand) {//send out a command now
 			if (!SendCommand(m_commands.firstElement())) {
+				m_commandLock.unlock();
 				return false;
 			}
 		}
+		m_commandLock.unlock();
 		return true;
 	}
 
@@ -251,10 +266,12 @@ public class BluetoothCaptain extends Captain {
 				BluetoothGattDescriptor descriptor = m_characteristic.getDescriptor(uuid);
 				descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
 				gatt.writeDescriptor(descriptor);
+				m_commandLock.lock();
 				int nNumCommands = m_commands.size();
 				if (nNumCommands>0) {
 					SendCommand(m_commands.firstElement());
 				}
+				m_commandLock.unlock();
 			}
 		}
 	}
@@ -270,22 +287,27 @@ public class BluetoothCaptain extends Captain {
 
 	public boolean DataRead(byte []readBytes) {//check data from Bluetooth low energy (BLE) device (return true if successful (data is ok), false otherwise)
 		if (readBytes==null) return false;
+		m_commandLock.lock();
 		if (m_commands.size()<=0) {
 			Log.d("debug","received some unexpected data.\n");
+			m_commandLock.unlock();
 			return false;//no commands in queue, so not sure why data arrived???
 		}
 		REMOTE_COMMAND rc = m_commands.firstElement();
 		if (isReadingTransmittedBytes(readBytes,rc)) {
 			//do not have a response yet
 			//Log.d("debug","Read in transmitted bytes.\n");
+			m_commandLock.unlock();
 			return false;
 		}
 		m_readBytes = Util.appendBytes(readBytes,m_readBytes);
 		if (m_readBytes==null) {
+			m_commandLock.unlock();
 			return false;
 		}
 		m_readBytes = FilterOutAMOSCommands(m_readBytes);
 		if (m_readBytes==null) {
+			m_commandLock.unlock();
 			return false;
 		}
 		int nResyncIndex = FindResyncBytes(m_readBytes);
@@ -295,13 +317,14 @@ public class BluetoothCaptain extends Captain {
 
 		int nNumBytesRead = m_readBytes.length;
 		//test
-		//String sTest = String.format("nNumBytesRead = %d\n",nNumBytesRead);
-		//Log.d("debug",sTest);
+		String sTest = String.format("nNumBytesRead = %d\n",nNumBytesRead);
+		Log.d("debug",sTest);
 		//end test
 		if (rc == null) {
 			m_bSendingCommand=false;
 			Log.d("debug","rc is null.\n");
 			m_readBytes=null;
+			m_commandLock.unlock();
 			return false;
 		}
 
@@ -312,6 +335,7 @@ public class BluetoothCaptain extends Captain {
 			Log.d("debug",sErrMsg);
 			//Util.PopupMsg(m_context,sErrMsg);
 			m_readBytes=null;
+			m_commandLock.unlock();
 			return false;
 		}
 		byte[] dataTypeBytes = new byte[4];
@@ -327,6 +351,7 @@ public class BluetoothCaptain extends Captain {
 			Log.d("debug",sMsg);
 			//Util.PopupMsg(m_context,R.string.invalid_response);
 			m_readBytes=null;
+			m_commandLock.unlock();
 			return false;
 		}
 
@@ -337,6 +362,7 @@ public class BluetoothCaptain extends Captain {
 			Log.d("debug","Could not create boat data.\n");
 			//Util.PopupMsg(m_context,R.string.could_not_create_data);
 			m_readBytes = null;
+			m_commandLock.unlock();
 			return false;// unable to create this data type
 		}
 
@@ -346,11 +372,13 @@ public class BluetoothCaptain extends Captain {
 			m_bSendingCommand = false;
 			m_pBoatData=null;//no actual data returned from boat
 			m_readBytes=null;
+			m_commandLock.unlock();
 			return true;//confirmation was received successfully, but no data was included after that
 		}
 
 		if (nNumBytesRead<8) {//not enough size bytes have arrived yet
 			//did not read in enough bytes, need to wait for more bytes to arrive later
+			m_commandLock.unlock();
 			return false;
 		}
 
@@ -367,6 +395,7 @@ public class BluetoothCaptain extends Captain {
 			Log.d("debug",sMsg);
 			//Util.PopupMsg(m_context,R.string.unexpected_datasize);
 			m_readBytes = null;
+			m_commandLock.unlock();
 			return false;// unexpected data size
 		}
 		for (int i = 0; i < pBoatData.nDataSize; i++) {
@@ -386,6 +415,7 @@ public class BluetoothCaptain extends Captain {
 					m_bSendingCommand = false;
 					m_readBytes = null;
 				}
+				m_commandLock.unlock();
 				return false;//need to read in more bytes for image capture
 			}
 		}
@@ -402,15 +432,18 @@ public class BluetoothCaptain extends Captain {
 			//String sMsg = String.format("bytesremaining = %d, numtoreceive = %d\n",nNumBytesRemaining,nNumBytesToReceive);
 			//Log.d("debug",sMsg);
 			//Util.PopupMsg(m_context,R.string.not_enough_bytes);
+			m_commandLock.unlock();
 			return false;
 		}
 		if (!bSkipProcessData&&!ProcessBoatData(pBoatData)) {
+			m_commandLock.unlock();
 			return false;
 		}
 		//ProcessBoatData(pBoatData);
 		m_pBoatData = pBoatData;
 		//everything must have worked out ok, so now remove this command from the list
 		m_commands.removeElementAt(0);
+		m_commandLock.unlock();
 		m_bSendingCommand = false;
 		if (m_pBoatData.nPacketType!=REMOTE_COMMAND.VIDEO_DATA_PACKET) {
 			m_readBytes = null;
@@ -648,14 +681,18 @@ public class BluetoothCaptain extends Captain {
 		if (m_commands==null) {
 			return false;
 		}
+		m_commandLock.lock();
 		int nNumCommands = m_commands.size();
 		if (nNumCommands<=0) {
+			m_commandLock.unlock();
 			return false;
 		}
 		REMOTE_COMMAND rc = m_commands.firstElement();
 		if (rc.nCommand!=REMOTE_COMMAND.VIDEO_DATA_PACKET) {//current command is not a video command
+			m_commandLock.unlock();
 			return false;
 		}
+		m_commandLock.unlock();
 		return true;
 	}
 
@@ -762,6 +799,7 @@ public class BluetoothCaptain extends Captain {
 	 */
 	public void StopReadingVideoData() {
 		m_pBoatData = null;
+		m_commandLock.lock();
 		if (m_commands.size()>0) {
 			REMOTE_COMMAND rc = m_commands.firstElement();
 			if (rc.nCommand==REMOTE_COMMAND.VIDEO_DATA_PACKET) {
@@ -771,6 +809,7 @@ public class BluetoothCaptain extends Captain {
 		m_bSendingCommand = false;
 		m_readBytes = null;
 		m_nNumImageBytes = 0;
+		m_commandLock.unlock();
 	}
 
 	private int FindResyncBytes(byte []buf) {
@@ -836,6 +875,35 @@ public class BluetoothCaptain extends Captain {
 		AddCommand(rc);
 		return true;
 	}
+
+	private void TimeoutMethod() {
+		// This method is called directly by the timer
+		// and runs in the same thread as the timer.
+		//clear out any old commands that were sent more than REMOTE_COMMAND.ITMEOUT_TIME_MS ago
+		m_commandLock.lock();
+		int nNumCommands = m_commands.size();
+		boolean bCommandsRemoved = false;
+		for (int i=0;i<nNumCommands;i++) {
+			if (m_commands.firstElement().isCommandOld()) {
+				m_commands.removeElementAt(0);
+				bCommandsRemoved = true;
+			}
+			else break;//commands are in order from oldest to newest, so no subsequent commands can be "old"
+		}
+		nNumCommands = m_commands.size();
+		if (nNumCommands==0) {
+			m_bSendingCommand = false;
+		}
+		else if (bCommandsRemoved) {//send the command that is now first in the queue
+			//renew times of commands
+			for (int i=0;i<nNumCommands;i++) {
+				m_commands.elementAt(i).RenewTime();
+			}
+			SendCommand(m_commands.firstElement());//send out the first command in the queue
+		}
+		m_commandLock.unlock();
+	}
+
 
 }
 

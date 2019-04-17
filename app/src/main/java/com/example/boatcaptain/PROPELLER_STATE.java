@@ -1,8 +1,8 @@
 package com.example.boatcaptain;
 
 public class PROPELLER_STATE {
-	public static float MAX_ANGLE = 45;//maximum allowed rudder angle in degrees 
-	public static float MIN_ANGLE = -45;//minimum allowed rudder angle in degrees
+	public static float MAX_ANGLE = 70;//maximum allowed rudder angle in degrees
+	public static float MIN_ANGLE = -70;//minimum allowed rudder angle in degrees
 	public float fRudderAngle;//angle of the air rudder in degrees
 	public float fPropSpeed;//rotational speed of the air propeller (arbitrary units)
 	
