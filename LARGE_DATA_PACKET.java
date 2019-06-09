@@ -1,9 +1,10 @@
 package com.example.boatcaptain;
 
 import java.util.DuplicateFormatFlagsException;
+import android.util.Log;
 
 public class LARGE_DATA_PACKET {
-    public static int MAX_CHUNK_SIZE = 1024;//maximum allowable chunk size in bytes
+    public static int MAX_CHUNK_SIZE = 117;//maximum allowable size of the data portion in each incoming packet from the boat
     public byte [] m_dataBytes;//the data bytes in the chunk
     public int m_nDataSize;//the # of data bytes in the chunk
     public int m_nChunkIndex;//the index of the chunk (first chunk starts at zero)
@@ -49,8 +50,12 @@ public class LARGE_DATA_PACKET {
         //chunkBuf[9+#data bytes] = <CRC, most sig byte>
         //chunkBuf[10+#data bytes] = <CRC, least sig byte>
        int nMaxBytes = dataBuf.length;
-       for (int i=0;i<(nMaxBytes-11);i++) {
+       for (int i=nBufIndex;i<(nMaxBytes-11);i++) {
            if (dataBuf[i]=='A'&&dataBuf[i+1]=='M'&&dataBuf[i+2]=='O'&&dataBuf[i+3]=='S') {
+               //test
+               String sTest = String.format("found AMOS text at i = %d\n",i);
+               Log.d("debug",sTest);
+               //end test
                byte []tempBuf = new byte[4];
                //chunk index
                tempBuf[0] = dataBuf[i+6];
@@ -66,9 +71,14 @@ public class LARGE_DATA_PACKET {
                int nDataSize = Util.toInt(tempBuf);
 
                if (nDataSize<0||nDataSize>MAX_CHUNK_SIZE) {
+                   Log.d("debug","invalid data size\n");
                    return new LARGE_DATA_PACKET(null,0,0,0);//invalid data size
                }
                else if ((11+i+nDataSize)>nMaxBytes) {//not enough bytes yet
+                   //test
+                   String sMsg = String.format("only have %d bytes, need %d\n",nMaxBytes,11+i+nDataSize);
+                   Log.d("debug",sMsg);
+                   //end test
                    return null;
                }
                byte []dataBytes = new byte[nDataSize];
@@ -84,12 +94,18 @@ public class LARGE_DATA_PACKET {
                tempBuf[3] = 0;
                int nTestChecksum = Util.toInt(tempBuf);
                if (nTestChecksum!=checksum_total) {
+                   String sMsg = String.format("invalid checksum, calculated = %d, got = %d\n",checksum_total,nTestChecksum);
+                   Log.d("debug",sMsg);
                    return new LARGE_DATA_PACKET(null,0,0,0);//invalid checksum
                }
                LARGE_DATA_PACKET largeDataPacket = new LARGE_DATA_PACKET(dataBytes, nDataSize, nChunkIndex, nTestChecksum);
                return largeDataPacket;//valid large data packet
            }
        }
+       //test
+        String sTest = String.format("nBytesAvail = %d\n",nMaxBytes-nBufIndex);
+       Log.d("debug",sTest);
+        // end test
        return null;//not enough data yet to form large data packet
     }
 

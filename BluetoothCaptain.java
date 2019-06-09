@@ -22,6 +22,7 @@ import static com.example.boatcaptain.MainActivity.STATUS_MODE;
 
 public class BluetoothCaptain extends Captain {
 	public static int LARGEDATA_CHUNKSIZE = 512;//size of serial packets that are read in at a single time
+	private static int MAXBYTES_TO_WRITE = 18;//maximum number of bytes that are written to the BLE device at a single time
 	public BOAT_DATA m_pBoatData;//most recently collected boat data
 	private int m_nErrorCount;//count of consecutive communications errors, gets reset to zero whenever a successful transmission occurs
 	private boolean m_bConnected;//flag is true if we have established a successful Bluetooth connection with the boat
@@ -31,6 +32,7 @@ public class BluetoothCaptain extends Captain {
 	private BluetoothGatt m_bluetoothGatt;
 	private BluetoothGattCharacteristic m_characteristic=null;//the Bluetooth Gatt characteristic that is used for the actual reading and writing of data with the AMOS_REMOTE device
 	private byte [] m_readBytes;//the bytes that are read in over the local Bluetooth connection
+	private byte [] m_extraDataBytes;//extra data bytes that did not fit into the small BLE packet size limit and need to be sent later
 	private int m_nImageBytesOffset = 0;//offset into m_readBytes where a group of image bytes starts
 	private Timer m_timeoutTimer;
 	private ReentrantLock m_commandLock;//used for controlling access to m_commands vector
@@ -40,6 +42,7 @@ public class BluetoothCaptain extends Captain {
 
 	BluetoothCaptain(Context context) {
 		//initialize commands vector
+		m_extraDataBytes = null;
 		m_commands = new Vector<REMOTE_COMMAND>();
 		m_bSendingCommand = false;
 		m_bFinishedDownloadingVideo = false;
@@ -223,20 +226,23 @@ public class BluetoothCaptain extends Captain {
 		}
 		//send command bytes
 		byte[] commandBytes = null;
+		int nNumToWrite = 0;
 		if (rc.nNumDataBytes>0) {
-			commandBytes = new byte[4+4+rc.nNumDataBytes];
+			nNumToWrite = Math.min(MAXBYTES_TO_WRITE,4+4+rc.nNumDataBytes);
+			commandBytes = new byte[nNumToWrite];
 		}
 		else commandBytes = new byte[4];
+		int nNumDataBytes = nNumToWrite - 8;//the number of bytes being sent that are data bytes
 		commandBytes[0] = (byte) ((rc.nCommand & 0xff000000) >> 24);
 		commandBytes[1] = (byte) ((rc.nCommand & 0x00ff0000) >> 16);
 		commandBytes[2] = (byte) ((rc.nCommand & 0x0000ff00) >> 8);
 		commandBytes[3] = (byte) (rc.nCommand & 0x000000ff);
-		if (rc.nNumDataBytes>0) {
+		if (nNumDataBytes>0) {
 			commandBytes[4] = (byte) ((rc.nNumDataBytes & 0xff000000) >> 24);
 			commandBytes[5] = (byte) ((rc.nNumDataBytes & 0x00ff0000) >> 16);
 			commandBytes[6] = (byte) ((rc.nNumDataBytes & 0x0000ff00) >> 8);
 			commandBytes[7] = (byte) (rc.nNumDataBytes & 0x000000ff);
-			for (int i = 0; i < rc.nNumDataBytes; i++) {
+			for (int i = 0; i < nNumDataBytes; i++) {
 				commandBytes[8 + i] = rc.pDataBytes[i];
 			}
 		}
@@ -248,6 +254,15 @@ public class BluetoothCaptain extends Captain {
 			Log.d("debug", "error sending command bytes.\n");
 			return false;
 		}
+		if (nNumDataBytes>0&&nNumDataBytes<rc.nNumDataBytes) {
+			//there are other data bytes that need to be sent, save them and send them later
+			int nNumExtraBytes = rc.nNumDataBytes - nNumDataBytes;
+			m_extraDataBytes = new byte[nNumExtraBytes];
+			for (int i=0;i<nNumExtraBytes;i++) {
+				m_extraDataBytes[i] = rc.pDataBytes[nNumDataBytes+i];
+			}
+		}
+		else m_extraDataBytes = null;
 		//now need to wait for confirmation that bytes were successfully sent...
 		return true;
 	}
@@ -351,8 +366,7 @@ public class BluetoothCaptain extends Captain {
 						//test
 						Log.d("debug","sending confirmation\n");
 						//end test
-						byte []crc_bytes = largeDataPacket.GetCRCBytes();
-						this.SendVideoDoneChunk(crc_bytes);
+						this.SendVideoDoneChunk(largeDataPacket);
 						//everything must have worked out ok, so now remove this command from the list
 						m_commands.removeElementAt(0);
 						m_bSendingCommand = false;
@@ -362,18 +376,23 @@ public class BluetoothCaptain extends Captain {
 				}
 				else {
 					//must have re-downloaded a large data packet that has already been downloaded, so need to remove it
+					//test
+					Log.d("debug","re-downloaded large data packet\n");
+					//end test
+					this.SendVideoDoneChunk(largeDataPacket);
 					m_readBytes = largeDataPacket.RemoveLastPartialChunk(m_readBytes, m_nLargeDataIndex);//remove all data from m_nLargeDataIndex on
+					m_commandLock.unlock();
+					return false;
 				}
 				//send confirmation (2 crc bytes) back to AMOS to indicate that large data packet was received
 				//test
 				Log.d("debug","sending confirmation\n");
 				//end test
-				byte []crc_bytes = largeDataPacket.GetCRCBytes();
-				if (!this.SendVideoDoneChunk(crc_bytes)) {
+				if (!this.SendVideoDoneChunk(largeDataPacket)) {
 					//try again
-					if (!this.SendVideoDoneChunk(crc_bytes)) {
+					if (!this.SendVideoDoneChunk(largeDataPacket)) {
 						//try one last time
-						if (!this.SendVideoDoneChunk(crc_bytes)) {
+						if (!this.SendVideoDoneChunk(largeDataPacket)) {
 							//can't send out data for some reason, cancel downloading of image
 							m_commands.removeElementAt(0);
 							m_bSendingCommand = false;
@@ -392,6 +411,8 @@ public class BluetoothCaptain extends Captain {
 				m_readBytes = largeDataPacket.RemoveLastPartialChunk(m_readBytes, m_nLargeDataIndex);
 				//just send a single zero byte (0x00) to indicate that an error occurred
 				this.SendVideoError();
+				m_commandLock.unlock();
+				return false;
 			}
 
 		}
@@ -569,8 +590,12 @@ public class BluetoothCaptain extends Captain {
 	 * SentDone: call this function after bytes have been sent out, when it is time to start reading in the response from AMOS
 	 */
 	public void SentDone() {
-		if (this.isReadingVideoData()) {
-			return;//reading in image data, don't need to keep reading characteristic
+		//if (this.isReadingVideoData()) {
+		//	return;//reading in image data, don't need to keep reading characteristic
+		//}
+		if (this.m_extraDataBytes!=null) {
+			SendExtraDataBytes();//send out extra data bytes
+			return;
 		}
 		if (!m_bluetoothGatt.readCharacteristic(m_characteristic)) {
 			//Util.PopupMsg(m_context,R.string.error_reading_characteristic);
@@ -816,15 +841,24 @@ public class BluetoothCaptain extends Captain {
 
 	/**
 	 * SendVideoDoneChunk: send confirmation back to AMOS that a large chunk of video data has been successfully downloaded
-	 * @param crc_bytes the 2 CRC bytes received at the end of the large data packet from AMOS. These are echoed back to indicate that the packet was received successfully.
+	 * @param large_data_packet an object of type LARGE_DATA_PACKET that corresponds to the large packet of data that was just successfully downloaded
 	 *
 	 * @return true if completed successfully, otherwise false
 	 */
-	public boolean SendVideoDoneChunk(byte [] crc_bytes) {
+	public boolean SendVideoDoneChunk(LARGE_DATA_PACKET large_data_packet) {
 		if (!m_bConnected) {
 			Log.d("debug","Error, not connected to HM-10.");
 			return false;
 		}
+		byte []bytes_to_send = new byte[4];
+		byte []crc_bytes = large_data_packet.GetCRCBytes();
+		if (crc_bytes==null) {
+			return false;
+		}
+		bytes_to_send[0] = 0;
+		bytes_to_send[1] = 0;
+		bytes_to_send[2] = crc_bytes[0];
+		bytes_to_send[3] = crc_bytes[1];
 		if (m_characteristic==null) {
 			if (!GetCharacteristic()) {
 				Log.d("debug","Error, could not get characteristic.");
@@ -835,7 +869,7 @@ public class BluetoothCaptain extends Captain {
 			Log.d("debug","Error trying to begin reliable write.");
 			return false;
 		}
-		if (!m_characteristic.setValue(crc_bytes)) {
+		if (!m_characteristic.setValue(bytes_to_send)) {
 			Log.d("debug","Error trying to set value of characteristic.");
 			return false;
 		}
@@ -843,10 +877,14 @@ public class BluetoothCaptain extends Captain {
 			Log.d("debug","Error trying to write characteristic.");
 			return false;
 		}
+		//test
+		String sTest = String.format("crc0 = %d, crc1 = %d\n",(int)crc_bytes[0],(int)crc_bytes[1]);
+		Log.d("debug",sTest);
+		//end test
 		return true;
 	}
 
-	private void SendVideoError() {//send single 0x00 byte back to AMOS to indicate that the last data packet got garbled somehow
+	private void SendVideoError() {//send four 0xFF bytes back to AMOS to indicate that the last data packet got garbled somehow
 		if (!m_bConnected) {
 			Log.d("debug","Error, not connected to HM-10.");
 		}
@@ -859,8 +897,12 @@ public class BluetoothCaptain extends Captain {
 		if (!m_bluetoothGatt.beginReliableWrite()) {
 			Log.d("debug","Error trying to begin reliable write.");
 		}
-		byte [] error_byte = new byte[1];
-		if (!m_characteristic.setValue(error_byte)) {
+		byte [] error_bytes = new byte[4];
+		error_bytes[0] = (byte)0xff;
+		error_bytes[1] = (byte)0xff;
+		error_bytes[2] = (byte)0xff;
+		error_bytes[3] = (byte)0xff;
+		if (!m_characteristic.setValue(error_bytes)) {
 			Log.d("debug","Error trying to set value of characteristic.");
 		}
 		if (!m_bluetoothGatt.writeCharacteristic(m_characteristic)) {
@@ -1014,5 +1056,49 @@ public class BluetoothCaptain extends Captain {
 		return bCommandsRemoved;
 	}
 
+	private void SendExtraDataBytes() {//send out extra data bytes
+		if (m_extraDataBytes==null) return;
+		if (!m_bConnected) {
+			m_extraDataBytes = null;
+			return;
+		}
+		if (m_characteristic==null) {
+			m_extraDataBytes = null;
+			return;
+		}
+		if (!m_bluetoothGatt.beginReliableWrite()) {
+			//Util.PopupMsg(m_context, R.string.error_initializing_write);
+			Log.d("debug","error initializing write.\n");
+			m_extraDataBytes = null;
+			return;
+		}
+		byte[] dataBytes = null;
+		int nNumToWrite = Math.min(MAXBYTES_TO_WRITE,m_extraDataBytes.length);
+		dataBytes = new byte[nNumToWrite];
+		for (int i = 0; i < nNumToWrite; i++) {
+			dataBytes[i] = m_extraDataBytes[i];
+		}
+		if (!m_characteristic.setValue(dataBytes)) {
+			Log.d("debug","error setting characteristic value.\n");
+			m_extraDataBytes = null;
+			return;
+		}
+		if (!m_bluetoothGatt.writeCharacteristic(m_characteristic)) {
+			Log.d("debug", "error sending command bytes.\n");
+			m_extraDataBytes = null;
+			return;
+		}
+		if (nNumToWrite<m_extraDataBytes.length) {
+			//there are other data bytes that need to be sent, save them and send them later
+			int nNumExtraBytes = m_extraDataBytes.length - nNumToWrite;
+			byte [] extraDataBytes = new byte[nNumExtraBytes];
+			for (int i=0;i<nNumExtraBytes;i++) {
+				extraDataBytes[i] = m_extraDataBytes[nNumToWrite+i];
+			}
+			m_extraDataBytes = extraDataBytes;
+		}
+		else m_extraDataBytes = null;
+		//now need to wait for confirmation that bytes were successfully sent...
+	}
 }
 
