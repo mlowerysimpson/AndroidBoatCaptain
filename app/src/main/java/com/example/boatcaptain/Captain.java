@@ -1,5 +1,8 @@
 package com.example.boatcaptain;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
@@ -7,8 +10,8 @@ import android.content.Context;
 
 public class Captain {
 	//data
-	protected double m_dLatitude;//the last known latitude of the boat
-	protected double m_dLongitude;//the last known longtitude of the boat
+	public double m_dLatitude;//the last known latitude of the boat
+	public double m_dLongitude;//the last known longtitude of the boat
 	protected long m_gpsTime;//the last known time of a GPS reading from the boat (in ms since Jan 01, 1970, 00:00:00)
 	protected float m_fBatteryVoltage;//the voltage of the boat's battery
 	protected boolean m_bLeakDetected;//whether or not a leak was detected in the boat
@@ -17,22 +20,36 @@ public class Captain {
 	protected float m_fWaterTemp;//the last known water temperature measured by the boat
 	protected float m_fPH;//the last known water pH value measured by the boat
 	protected float m_fWaterTurbidity;//the last known water turbidity measured by the boat
-	protected float m_fHumidity;//the humidity inside the main enclosure of AMOS
-	protected float m_fHumidityTemp;//the temperature as measured by the humidity sensor in AMOS
+	protected float m_fHumidityCPU;//the humidity inside the CPU enclosure of AMOS
+	protected float m_fHumidityTempCPU;//the temperature as measured by the humidity sensor in the CPU enclosure of AMOS
+	protected float m_fHumidityBatt;//the humidity inside the battery enclosure of AMOS
+	protected float m_fHumidityTempBatt;//the temperature as measured by the humidity sensor in the battery enclosure of AMOS
 	protected boolean m_bSolarAvailable;//flag is true if solar power is available for charging the boat's battery, otherwise false
-	protected IMU_DATASAMPLE m_compassData;//the last known compass data from the boat
+	public IMU_DATASAMPLE m_compassData;//the last known compass data from the boat
 	protected int m_nNumSensorsAvailable;//the total number of sensors that the boat has available
 	protected int []m_sensorTypes;//the types of sensors that the boat has available, see SensorDataFile.h for a list of the supported sensor types
 	public String m_sLastError;//string describing the last network error that occurred
-	public int m_nNumImageBytes;//the number of image bytes saved by the boat that are available for download
+	public int m_nNumLargeBlockBytes;//the number of bytes sent from the boat that are available in a large packet of data
 	private long m_lastIncrDecrTime;//the time (in ms) when a quantity was last incremented or decremented
-	
-	private PROPELLER_STATE m_currentPropState;//the current state of the propellers
+	protected String m_sRemoteScriptName;//the filename of the script currently running on the boat
+	protected String m_sRemoteScriptsAvailable;//list of all the remote scripts currently available on AMOS (each name separated by '\n')
+	protected String m_sRemoteDataAvailable;//list of all the remote data files currently available on AMOS (each name separated by '\n')
+	protected String m_sRemoteLogsAvailable;//list of all the remote log files currently available on AMOS (each name separated by '\n')
+	protected String m_sRemoteRemoteImageFilesAvailable;//list of all the remote image files currently available on AMOS (each name separated by '\n')
+	protected String m_sUnDeletedFiles;//filenames on AMOS that could not be deleted (in response to a "delete files' command
 	private SimpleDateFormat m_dateFormat;
-	
+
+	private PROPELLER_STATE m_currentPropState;//the current state of the propellers
+
+	//file types that can be downloaded
+	public static int REMOTE_SCRIPT_FILES = 0;
+	public static int REMOTE_DATA_FILES = 1;
+	public static int REMOTE_LOG_FILES = 2;
+	public static int REMOTE_IMAGE_FILES = 3;
+
 	Captain() {
 		m_lastIncrDecrTime = 0;
-		m_nNumImageBytes = 0;
+		m_nNumLargeBlockBytes = 0;
 		m_bLeakDetected = false;
 		m_bSolarAvailable = false;
 		m_fCurrentDraw=0;
@@ -40,8 +57,10 @@ public class Captain {
 		m_fWaterTemp=0;
 		m_fPH=0;
 		m_fWaterTurbidity=0;
-		m_fHumidity=0;
-		m_fHumidityTemp=0;
+		m_fHumidityCPU=0;
+		m_fHumidityTempCPU=0;
+		m_fHumidityBatt=0;
+		m_fHumidityTempBatt=0;
 		m_nNumSensorsAvailable=0;
 		m_sensorTypes = null;
 		m_currentPropState = new PROPELLER_STATE();
@@ -161,7 +180,7 @@ public class Captain {
 			return true;
 		}
 		else if (pBoatData.nPacketType==REMOTE_COMMAND.DIAGNOSTICS_DATA_PACKET) {
-			if (pBoatData.nDataSize!=24) {
+			if (pBoatData.nDataSize!=32) {
 				return false;
 			}
 			//battery voltage
@@ -174,31 +193,45 @@ public class Captain {
 			}
 			m_fCurrentDraw = Util.toFloat(currentBytes);
 			
-			//humidity
-			byte [] humidityBytes = new byte[4];
+			//CPU enclosure humidity
+			byte [] humidityCPUBytes = new byte[4];
 			for (int i=0;i<4;i++) {
-				humidityBytes[i] = pBoatData.dataBytes[8+i];
+				humidityCPUBytes[i] = pBoatData.dataBytes[8+i];
 			}
-			m_fHumidity = Util.toFloat(humidityBytes);
+			m_fHumidityCPU = Util.toFloat(humidityCPUBytes);
 			
-			//humidity temperature (i.e. temperature as measured by the humidity sensor)
-			byte [] humidityTempBytes = new byte[4];
+			//CPU enclosure temperature (i.e. temperature as measured by the humidity sensor inside the CPU enclosure)
+			byte [] humidityTempCPUBytes = new byte[4];
 			for (int i=0;i<4;i++) {
-				humidityTempBytes[i] = pBoatData.dataBytes[12+i];
+				humidityTempCPUBytes[i] = pBoatData.dataBytes[12+i];
 			}
-			m_fHumidityTemp = Util.toFloat(humidityTempBytes);
+			m_fHumidityTempCPU = Util.toFloat(humidityTempCPUBytes);
+
+			//Battery enclosure humidity
+			byte [] humidityBattBytes = new byte[4];
+			for (int i=0;i<4;i++) {
+				humidityBattBytes[i] = pBoatData.dataBytes[16+i];
+			}
+			m_fHumidityBatt = Util.toFloat(humidityBattBytes);
+
+			//Battery enclosure temperature (i.e. temperature as measured by the humidity sensor inside the battery enclosure)
+			byte [] humidityTempBattBytes = new byte[4];
+			for (int i=0;i<4;i++) {
+				humidityTempBattBytes[i] = pBoatData.dataBytes[20+i];
+			}
+			m_fHumidityTempBatt = Util.toFloat(humidityTempBattBytes);
 			
 			//wireless RX power
 			byte [] rxPowerBytes = new byte[4];
 			for (int i=0;i<4;i++) {
-				rxPowerBytes[i] = pBoatData.dataBytes[16+i];
+				rxPowerBytes[i] = pBoatData.dataBytes[24+i];
 			}
 			m_fWirelessRXPower = Util.toFloat(rxPowerBytes);
 					
 			//solar power availability
 			byte [] solarBytes = new byte[4];
 			for (int i=0;i<4;i++) {
-				solarBytes[i] = pBoatData.dataBytes[20+i];
+				solarBytes[i] = pBoatData.dataBytes[28+i];
 			}
 			int nSolarAvail = Util.toInt(solarBytes);
 			if (nSolarAvail>0) m_bSolarAvailable = true;
@@ -298,11 +331,11 @@ public class Captain {
 		else sRXPower = "RX Power: N.A.";
 		String sDiagData="";
 		if (m_bSolarAvailable) {
-			sDiagData = String.format("Voltage: %.3f V, Current (@12 V): %.2f A, RH = %.1f %%, Temp = %.1f °C, %s, Solar: YES",
-				m_fBatteryVoltage, m_fCurrentDraw, m_fHumidity, m_fHumidityTemp, sRXPower);
+			sDiagData = String.format("Voltage: %.3f V, Current (@12 V): %.2f A, RH_CPU = %.1f %%, Temp_CPU = %.1f °C, RH_BATT = %.1f %%, Temp_BATT = %.1f °C, %s, Solar: YES",
+				m_fBatteryVoltage, m_fCurrentDraw, m_fHumidityCPU, m_fHumidityTempCPU, m_fHumidityBatt, m_fHumidityTempBatt, sRXPower);
 		}
-		else sDiagData = String.format("Voltage: %.3f V, Current (@12 V): %.2f A, RH = %.1f %%, Temp = %.1f °C, %s, Solar: NO",
-			m_fBatteryVoltage, m_fCurrentDraw, m_fHumidity, m_fHumidityTemp, sRXPower);
+		else sDiagData = String.format("Voltage: %.3f V, Current (@12 V): %.2f A, RH_CPU = %.1f %%, Temp_CPU = %.1f °C, RH_BATT = %.1f %%, Temp_BATT = %.1f °C, %s, Solar: NO",
+			m_fBatteryVoltage, m_fCurrentDraw, m_fHumidityCPU, m_fHumidityTempCPU, m_fHumidityBatt, m_fHumidityTempBatt, sRXPower);
 		return sDiagData;
 	}
 
@@ -347,6 +380,30 @@ public class Captain {
 		}
 		m_lastIncrDecrTime = currentTime;
 		return fVal - fDecrementVal;
+	}
+
+	/**
+	 * makes a request to download a remote filename from AMOS
+	 * @param sRemoteFilename the path of the remote filename to download
+	 * @return a REMOTE_COMMAND object containing info about the size of the filename being requested
+	 */
+	public REMOTE_COMMAND CreateRemoteFileCommand(String sRemoteFilename) {
+		if (sRemoteFilename==null) {//invalid parameter
+			return null;
+		}
+		int nRemoteFilenameLength = sRemoteFilename.length();
+		if (nRemoteFilenameLength==0) {
+			return null;
+		}
+		REMOTE_COMMAND rc = new REMOTE_COMMAND();
+		rc.nCommand = REMOTE_COMMAND.FILE_RECEIVE;
+		rc.nNumDataBytes = 4;
+		rc.pDataBytes = new byte[4];
+		rc.pDataBytes[0] = (byte) ((nRemoteFilenameLength & 0xff000000) >> 24);
+		rc.pDataBytes[1] = (byte) ((nRemoteFilenameLength & 0x00ff0000) >> 16);
+		rc.pDataBytes[2] = (byte ) ((nRemoteFilenameLength & 0x0000ff00) >> 8);
+		rc.pDataBytes[3] = (byte) (nRemoteFilenameLength & 0x000000ff);
+		return rc;
 	}
 }
 

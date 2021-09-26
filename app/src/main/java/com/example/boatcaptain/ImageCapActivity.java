@@ -113,7 +113,7 @@ class ImageDownloadTask extends AsyncTask<String, Integer, String> {
                 String sError = new String("Error, did not receive acknowledgement for image request.");
                 return sError;
             }
-            int nNumBytes = MainActivity.m_pNetCaptain.m_nNumImageBytes;
+            int nNumBytes = MainActivity.m_pNetCaptain.m_nNumLargeBlockBytes;
             ImageCapActivity.m_nImageSize = nNumBytes;
             int nNumImagePackets = nNumBytes / NetCaptain.CHUNKSIZE;
             if ((nNumBytes % NetCaptain.CHUNKSIZE)>0) {
@@ -165,6 +165,8 @@ class ImageDownloadTask extends AsyncTask<String, Integer, String> {
             }
         }
     }
+
+    @Override
     protected void onProgressUpdate(Integer... bytes_downloaded) {
         //This method runs on the UI thread, it receives progress updates from the background thread and updates the status text and progress bar
         int nProgress = 100 * bytes_downloaded[0] / ImageCapActivity.m_nImageSize;

@@ -65,6 +65,30 @@ public class BoatCommand {
 			pAMOSData.dataBytes = new byte[pAMOSData.nDataSize];
 			pAMOSData.checkSum = CalculateChecksum(pAMOSData);//checksum needs to be recalculated whenever pAMOSData changes
 		}
+		else if (nDataType==REMOTE_COMMAND.LIST_REMOTE_DATA) {
+			pAMOSData.nPacketType = REMOTE_COMMAND.LIST_REMOTE_DATA;
+			pAMOSData.nDataSize = 4;
+			pAMOSData.dataBytes = new byte[pAMOSData.nDataSize];
+			pAMOSData.checkSum = CalculateChecksum((pAMOSData));//checksum needs to be recalculated whenever pAMOSData changes
+		}
+		else if (nDataType==REMOTE_COMMAND.LIST_REMOTE_IMAGE) {
+			pAMOSData.nPacketType = REMOTE_COMMAND.LIST_REMOTE_IMAGE;
+			pAMOSData.nDataSize = 4;
+			pAMOSData.dataBytes = new byte[pAMOSData.nDataSize];
+			pAMOSData.checkSum = CalculateChecksum((pAMOSData));//checksum needs to be recalculated whenever pAMOSData changes
+		}
+		else if (nDataType==REMOTE_COMMAND.LIST_REMOTE_LOG) {
+			pAMOSData.nPacketType = REMOTE_COMMAND.LIST_REMOTE_LOG;
+			pAMOSData.nDataSize = 4;
+			pAMOSData.dataBytes = new byte[pAMOSData.nDataSize];
+			pAMOSData.checkSum = CalculateChecksum((pAMOSData));//checksum needs to be recalculated whenever pAMOSData changes
+		}
+		else if (nDataType==REMOTE_COMMAND.LIST_REMOTE_SCRIPTS) {
+			pAMOSData.nPacketType = REMOTE_COMMAND.LIST_REMOTE_SCRIPTS;
+			pAMOSData.nDataSize = 4;
+			pAMOSData.dataBytes = new byte[pAMOSData.nDataSize];
+			pAMOSData.checkSum = CalculateChecksum((pAMOSData));//checksum needs to be recalculated whenever pAMOSData changes
+		}
 		else if (nDataType==REMOTE_COMMAND.LEAK_DATA_PACKET) {
 			pAMOSData.nPacketType = REMOTE_COMMAND.LEAK_DATA_PACKET;
 			pAMOSData.nDataSize = 4;
@@ -73,7 +97,13 @@ public class BoatCommand {
 		}
 		else if (nDataType==REMOTE_COMMAND.DIAGNOSTICS_DATA_PACKET) {
 			pAMOSData.nPacketType = REMOTE_COMMAND.DIAGNOSTICS_DATA_PACKET;
-			pAMOSData.nDataSize = 24;
+			pAMOSData.nDataSize = 32;
+			pAMOSData.dataBytes = new byte[pAMOSData.nDataSize];
+			pAMOSData.checkSum = CalculateChecksum(pAMOSData);//checksum needs to be recalculated
+		}
+		else if (nDataType==REMOTE_COMMAND.FILE_RECEIVE) {
+			pAMOSData.nPacketType = REMOTE_COMMAND.FILE_RECEIVE;
+			pAMOSData.nDataSize = 4;
 			pAMOSData.dataBytes = new byte[pAMOSData.nDataSize];
 			pAMOSData.checkSum = CalculateChecksum(pAMOSData);//checksum needs to be recalculated
 		}

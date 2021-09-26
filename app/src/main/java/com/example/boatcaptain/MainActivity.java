@@ -34,6 +34,9 @@ import android.media.Image;
 import android.os.Bundle;
 import android.os.Environment;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -88,6 +91,7 @@ public class MainActivity extends Activity {
 	private Button m_cStopButton;
 	private Button m_cHomeButton;
 	private Button m_cCameraButton;
+	private Button m_cMapButton;
 	private Button m_cForwardButton;
 	private Button m_cBackButton;
 	private Button m_cLeftButton;
@@ -95,7 +99,9 @@ public class MainActivity extends Activity {
 	private EditText m_cIPAddr;
 	public static  NetCaptain m_pNetCaptain;
 	public static  BluetoothCaptain m_pBluetoothCaptain;
-	private GPSTracker m_gpsTracker;
+	public static GPSTracker m_gpsTracker;
+	public static String m_sDiagnosticsText="";// general diagnostic data to display
+
 	private String m_sIPAddr;// the IP address specified in the m_cIPAddr
 								// control
 	private boolean m_bTimerStarted;// true once the 10-sec timer for GPS
@@ -108,7 +114,7 @@ public class MainActivity extends Activity {
 	private String m_sGPSText="";// GPS data to display onscreen
 	private String m_sCompassText="";// compass, roll, pitch data to display
 									// onscreen
-	private String m_sDiagnosticsText="";// general diagnostic data to display
+
 	private String m_sLeakText="";//leak sensor text to display
 										// onscreen
 	private boolean m_bUsingBluetooth = false;//set to true if we are using a Bluetooth connection (to the remote control box) as opposed to a network connection to a server for communications with AMOS.
@@ -153,6 +159,7 @@ public class MainActivity extends Activity {
 		m_cStopButton = (Button) findViewById(R.id.stop_button);
 		m_cHomeButton = (Button) findViewById(R.id.home_button);
 		m_cCameraButton = (Button) findViewById(R.id.camera_button);
+		m_cMapButton = (Button) findViewById(R.id.map_button);
 		m_cForwardButton = (Button) findViewById(R.id.forwards_button);
 		m_cLeftButton = (Button) findViewById(R.id.left_button);
 		m_cRightButton = (Button) findViewById(R.id.right_button);
@@ -171,6 +178,7 @@ public class MainActivity extends Activity {
 		addRightButtonListener();
 		addBackButtonListener();
 		addHomeButtonListener();
+		addMapButtonListener();
 		addBluetoothCheckboxListener();
 		GetPrefs();
 		if (!isBLESupported()) {//if Bluetooth Low Energy (BLE) is not supported, we need to de-select and hide the controls for using a Bluetooth connection and make sure that the Network-related controls are shown instead
@@ -745,6 +753,16 @@ public class MainActivity extends Activity {
 		});
 	}
 
+	private void addMapButtonListener() {
+		m_cMapButton.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View view) {
+				ShowMap();
+			}
+		});
+
+	}
+
 	private void RequestImage() {
 		if (m_pNetCaptain == null&&m_pBluetoothCaptain==null) {
 			return;
@@ -804,7 +822,7 @@ public class MainActivity extends Activity {
 	void StartBluetoothConnection() {//does initialization stuff for getting a Bluetooth connection to the remote control box that talks to AMOS over a long-distance wireless link.
 		//create Bluetooth captain object
 		if (m_pBluetoothCaptain==null) {
-			m_pBluetoothCaptain = new BluetoothCaptain(m_context);
+			m_pBluetoothCaptain = new BluetoothCaptain();
 			//get rid of network captain (if present)
 			m_pNetCaptain = null;
 		}
@@ -844,7 +862,7 @@ public class MainActivity extends Activity {
 	private void StartBLEScan() {//start scan for the BLE device used for communication with the remote box
 
 		List <ScanFilter> ble_filter = Arrays.asList(new ScanFilter[]{
-				new ScanFilter.Builder().setDeviceName("AMOS_REMOTE\r\n").build()});
+				new ScanFilter.Builder().setDeviceName("AMOS_REMOTE").build()});
 		m_leScanner = m_bluetoothAdapter.getBluetoothLeScanner();
 		if (m_leScanner!=null) {
 			ScanSettings settings = new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build();
@@ -937,8 +955,8 @@ public class MainActivity extends Activity {
 
 			@Override
 			public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-            	//characteristic has changed, read it to get data / find out what happened
-				byte []testBytes = characteristic.getValue();
+				//characteristic has changed, read it to get data / find out what happened
+				byte[] testBytes = characteristic.getValue();
 				if (m_pBluetoothCaptain.DataRead(testBytes)) {
 					//data was read in successfully, so update speed and angle state (on main thread)
 					MainActivity.this.runOnUiThread(new Runnable() {
@@ -948,25 +966,67 @@ public class MainActivity extends Activity {
 						}
 					});
 				}
-				else if (m_pBluetoothCaptain.isReadingVideoData()) {
-					if (m_pBluetoothCaptain.isFinishedVideoChunk()) {
-						m_pBluetoothCaptain.SendVideoDoneChunk();
-						MainActivity.this.runOnUiThread(new Runnable() {
-							@Override
-							public void run() {
-								ImageCapActivity.UpdateDownloadStatus(m_pBluetoothCaptain.GetNumVideoBytesDownloaded(), m_pBluetoothCaptain.m_nNumImageBytes);
-							}
-						}) ;
+				else if (m_pBluetoothCaptain.isReadingLargeChunkData()) {
+					if (m_pBluetoothCaptain.m_pBoatData!=null) {
+						if (m_pBluetoothCaptain.m_pBoatData.nPacketType==REMOTE_COMMAND.VIDEO_DATA_PACKET) {
+							MainActivity.this.runOnUiThread(new Runnable() {
+								@Override
+								public void run() {
+									ImageCapActivity.UpdateDownloadStatus(m_pBluetoothCaptain.GetNumLargeChunkBytesDownloaded(), m_pBluetoothCaptain.m_nNumLargeBlockBytes);
+								}
+							});
+						}
+						else if (m_pBluetoothCaptain.m_pBoatData.nPacketType==REMOTE_COMMAND.FILE_RECEIVE) {
+							MainActivity.this.runOnUiThread(new Runnable() {
+								@Override
+								public void run() {
+									DownloadFilesActivity.UpdateDownloadStatus(m_pBluetoothCaptain.GetNumLargeChunkBytesDownloaded(), m_pBluetoothCaptain.m_nNumLargeBlockBytes);
+								}
+							});
+						}
 					}
-					if (m_pBluetoothCaptain.isFinishedDownloadingVideo()) {
-						MainActivity.this.runOnUiThread(new Runnable() {
-							@Override
-							public void run() {
-								ImageCapActivity.DisplayDownloadedImageBytes(m_pBluetoothCaptain.GetImageBytes());
-								m_pBluetoothCaptain.StopReadingVideoData();
+				}
+				if (m_pBluetoothCaptain.isFinishedDownloadingLargeChunk()) {
+					//test
+					Log.d("debug","finished downloading large data chunk.\n");
+					//end test
+					MainActivity.this.runOnUiThread(new Runnable() {
+						@Override
+						public void run() {
+							if (m_pBluetoothCaptain.m_nLargePacketTypeDownloaded==REMOTE_COMMAND.VIDEO_DATA_PACKET) {
+								ImageCapActivity.DisplayDownloadedImageBytes(m_pBluetoothCaptain.GetLargeChunkBytes());
+								m_pBluetoothCaptain.StopReadingLargeChunkData();
 							}
-						}) ;
-					}
+							else if (m_pBluetoothCaptain.m_nLargePacketTypeDownloaded==REMOTE_COMMAND.LIST_REMOTE_DATA) {
+								byte []largeChunkBytes = m_pBluetoothCaptain.GetLargeChunkBytes();
+								if (largeChunkBytes==null) {
+									UpdateStatus("Error, no data files available on AMOS.", true, true);
+									return;
+								}
+								m_pBluetoothCaptain.m_sRemoteDataAvailable = new String(largeChunkBytes);
+								List<String> remoteDataFiles = Util.SplitStrToList(m_pBluetoothCaptain.m_sRemoteDataAvailable, "\r|\n");
+								m_pBluetoothCaptain.StopReadingLargeChunkData();
+								if (remoteDataFiles==null||remoteDataFiles.size() == 0)
+								{
+									UpdateStatus("No data files are available on AMOS.", true, true);
+									return;
+								}
+								else
+								{
+									//show activity for downloading files
+									Intent intent = new Intent(MainActivity.this,
+											DownloadFilesActivity.class);
+									intent.putExtra("download_files", remoteDataFiles.toArray());
+									intent.putExtra("download_type", REMOTE_COMMAND.LIST_REMOTE_DATA);
+									startActivity(intent);
+								}
+							}
+							else if (m_pBluetoothCaptain.m_nLargePacketTypeDownloaded==REMOTE_COMMAND.FILE_RECEIVE) {
+								DownloadFilesActivity.SaveDownloadedFileBytes(m_pBluetoothCaptain.GetLargeChunkBytes());
+								m_pBluetoothCaptain.StopReadingLargeChunkData();
+							}
+						}
+					});
 				}
 			}
         };
@@ -1004,9 +1064,8 @@ public class MainActivity extends Activity {
 			//end test
 			sDiagnosticsText = m_pBluetoothCaptain.FormatDiagnosticsData();
 		}
-		else if (boatData.nPacketType==REMOTE_COMMAND.VIDEO_DATA_PACKET) {//just received complete video data packet, so display in image capture activity
-			//ImageCapActivity.DisplayDownloadedImageBytes(m_pBluetoothCaptain.GetImageBytes());
-			return;//do nothing her
+		else if (BluetoothCaptain.IsLargePacketType(boatData.nPacketType)) {//just received complete large data packet
+			return;//do nothing here
 		}
 		m_cGPSLocation.setText(m_sGPSText);
 		m_cCompassData.setText(m_sCompassText);
@@ -1022,5 +1081,99 @@ public class MainActivity extends Activity {
 		}
 		m_cDiagnosticsData.setText(m_sDiagnosticsText);
 	}
-	
+
+	private void ShowMap() {
+		// show graphical map view
+		Intent intent = new Intent(MainActivity.this,
+				MapActivity.class);
+		//intent.putExtra("image_filename", m_sImageFilename);
+		startActivity(intent);
+
+	}
+
+
+	@Override
+	public boolean onCreateOptionsMenu(Menu menu) {
+		MenuInflater inflater = getMenuInflater();
+		inflater.inflate(R.menu.boatcaptain_menu, menu);
+		return true;
+	}
+
+	@Override
+	public boolean onOptionsItemSelected(MenuItem item) {
+		// Handle menu item selection
+		switch (item.getItemId()) {
+			case R.id.open_datafile:
+				DownloadDataFile();
+				return true;
+			case R.id.open_depthfile:
+
+				return true;
+
+			case R.id.download_datafile:
+				DownloadDataFile();
+				return true;
+
+			case R.id.download_logfiles:
+
+				return true;
+
+			case R.id.download_imagefiles:
+
+				return true;
+
+			case R.id.remote_amos_programinfo:
+
+				return true;
+
+			case R.id.submenu_alarms:
+
+				return true;
+
+			case R.id.submenu_camera:
+
+				return true;
+
+			case R.id.submenu_lidar:
+
+				return true;
+
+			case R.id.submenu_sensors:
+
+				return true;
+
+			default:
+				return super.onOptionsItemSelected(item);
+		}
+	}
+
+	private void DownloadDataFile() {
+		if (m_pNetCaptain == null&&m_pBluetoothCaptain==null) {
+			NoConnectionErrMsg();// display message about not being
+			// connected to the boat yet
+			return;
+		}
+
+		List<String> remoteDataFiles = null;
+		if (m_pNetCaptain!=null) {
+			remoteDataFiles = m_pNetCaptain.GetRemoteDataFiles();
+			if (remoteDataFiles==null||remoteDataFiles.size() == 0)
+			{
+				UpdateStatus("No data files are available on AMOS.", true, true);
+				return;
+			}
+			else
+			{
+				//show activity for downloading files
+				Intent intent = new Intent(MainActivity.this,
+						DownloadFilesActivity.class);
+				intent.putExtra("download_files", remoteDataFiles.toArray());
+				intent.putExtra("download_files", REMOTE_COMMAND.LIST_REMOTE_DATA);
+				startActivity(intent);
+			}
+		}
+		else {
+			m_pBluetoothCaptain.GetRemoteDataFiles();
+		}
+	}
 }
