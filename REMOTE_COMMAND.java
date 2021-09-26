@@ -19,8 +19,24 @@ public class REMOTE_COMMAND {
 	public static int LEAK_DATA_PACKET = 20;//leak info data packet
 	public static int DIAGNOSTICS_DATA_PACKET = 21;//diagnostics info data packet
 	public static int CANCEL_OPERATION = 22;//cancel the operation currently in progress
+	public static int QUIT_PROGRAM = 23;//quit the currently running Pi program (RemoteControlTest) on AMOS
+	public static int ENTER_SLEEP = 24;//put AMOS into sleep mode for an optional length of time (or indefinitely). AMOS wakes up when time elapses or when a command to wakeup is received over the serial wireless link.
+	public static int SCRIPT_STATUS_PACKET = 25;//used to request or send the current status of the file script currently running on AMOS
+	public static int SCRIPT_STEP_CHANGE = 26;//used to change the step of the currently running file script
+	public static int LIST_REMOTE_SCRIPTS = 27;//command sent to AMOS to return a list of all of the available remote scripts
+	public static int USE_REMOTE_SCRIPT = 28;//command sent to AMOS to use a particular remote script
+	public static int FILE_TRANSFER = 29;//transfer a particular file to AMOS
+	public static int FILE_RECEIVE = 30;//receive / download a particular file from AMOS
+	public static int REFRESH_SETTINGS = 31;//command to refresh settings from a partiulcar part of the prefs.txt file
+	public static int LIST_REMOTE_DATA = 32;//command sent to AMOS to return a list of all of the available data files
+	public static int LIST_REMOTE_LOG = 33;//command sent to AMOS to return a list of all of the available log files
+	public static int LIST_REMOTE_IMAGE = 34;//command sent to AMOS to return a list of all of the available image files
+	public static int RTK_CORRECTION = 35;//sending RTK correction bytes to AMOS from an RTK base station
+	public static int DELETE_FILES = 36;//delete one or more AMOS files
+	public static int LAST_COMMAND = 37;//the highest possible command #
 
-	public static int ITMEOUT_TIME_MS = 5000;//timeout value in ms to use for communications
+
+	public static int TIMEOUT_TIME_MS = 5000;//timeout value in ms to use for communications
 
 	public static float MAX_SPEED = 10;//maximum speed allowed to use for the thrusters / propellers
 	public int nCommand;//command code sent from remote host
@@ -42,7 +58,7 @@ public class REMOTE_COMMAND {
 	public boolean isCommandOld() {
 		Calendar calendar = Calendar.getInstance();
 		long lCurrentTimeMS = calendar.getTimeInMillis();
-		if ((lCurrentTimeMS-lCommandTimeMS)>=ITMEOUT_TIME_MS) {
+		if ((lCurrentTimeMS-lCommandTimeMS)>=TIMEOUT_TIME_MS) {
 			return true;
 		}
 		return false;

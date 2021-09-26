@@ -10,6 +10,11 @@ import android.content.Context;
 import android.content.IntentFilter;
 import android.util.Log;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
@@ -28,31 +33,30 @@ public class BluetoothCaptain extends Captain {
 	private boolean m_bConnected;//flag is true if we have established a successful Bluetooth connection with the boat
 	private Vector <REMOTE_COMMAND> m_commands;
 	private boolean m_bSendingCommand;//trm_characteristicue if we are currently sending a command and / or expecting some sort of response
-	private Context m_context;
 	private BluetoothGatt m_bluetoothGatt;
 	private BluetoothGattCharacteristic m_characteristic=null;//the Bluetooth Gatt characteristic that is used for the actual reading and writing of data with the AMOS_REMOTE device
 	private byte [] m_readBytes;//the bytes that are read in over the local Bluetooth connection
 	private byte [] m_extraDataBytes;//extra data bytes that did not fit into the small BLE packet size limit and need to be sent later
-	private int m_nImageBytesOffset = 0;//offset into m_readBytes where a group of image bytes starts
+	private int m_nLargeBytesOffset = 0;//offset into m_readBytes where a group of image bytes starts
 	private Timer m_timeoutTimer;
 	private ReentrantLock m_commandLock;//used for controlling access to m_commands vector
-	private int m_nVideoChunkIndex = 0;//the index of the video chunk that is currently being downloaded (starts at 0, and goes up)
+	private int m_nDownloadingChunkIndex = 0;//the index of the data chunk (in a large data packet) that is currently being downloaded (starts at 0, and goes up)
 	private int m_nLargeDataIndex = 0;//index in m_readBytes from where to start looking for a valid "large data" packet
-	private boolean m_bFinishedDownloadingVideo = false;//flag is set to true after an image file is successfully downloaded
+	private boolean m_bFinishedDownloadingLargeChunk = false;//flag is set to true after a large chunk of data is successfully downloaded
+	public int m_nLargePacketTypeDownloaded = 0;//used to track the type of large packet that was most recently downloaded
 
-	BluetoothCaptain(Context context) {
+	BluetoothCaptain() {
 		//initialize commands vector
 		m_extraDataBytes = null;
 		m_commands = new Vector<REMOTE_COMMAND>();
 		m_bSendingCommand = false;
-		m_bFinishedDownloadingVideo = false;
-		m_context = context;
+		m_bFinishedDownloadingLargeChunk = false;
 		m_pBoatData = null;
 		m_readBytes = null;
 		m_timeoutTimer=null;
 		m_commandLock = new ReentrantLock();
-		m_nImageBytesOffset = 0;
-		m_nVideoChunkIndex = 0;
+		m_nLargeBytesOffset = 0;
+		m_nDownloadingChunkIndex = 0;
 		m_nLargeDataIndex = 0;
 
 	}
@@ -178,14 +182,18 @@ public class BluetoothCaptain extends Captain {
 
 	private boolean AddCommand(REMOTE_COMMAND rc) {//add a command to the list of commands to send, if it is the only command, then send it right away
 		RemoveOldCommands();//remove old commands that were sent more than REMOTE_COMMAND.TIMEOUT_TIME_MS ago
-		if (rc.nCommand!=REMOTE_COMMAND.VIDEO_DATA_PACKET) {//for non-video data packets, use a timeout limit for the incoming data
+		if (rc.nCommand==REMOTE_COMMAND.THRUST_ON)
+		{
+			RemovePreviousThrustCommands();//no need to send commands for previous thrust states, since the current one is the only one that matters
+		}
+		if (!BluetoothCaptain.IsLargePacketType(rc.nCommand)) {//for non-large data chunk packets, use a timeout limit for the incoming data
 			m_timeoutTimer = new Timer();
 			m_timeoutTimer.schedule(new TimerTask() {
 				@Override
 				public void run() {
 					TimeoutMethod();
 				}
-			}, REMOTE_COMMAND.ITMEOUT_TIME_MS);// launch singleshot timer function in REMOTE_COMMAND.TIMEOUT_TIME_MS ms
+			}, REMOTE_COMMAND.TIMEOUT_TIME_MS);// launch singleshot timer function in REMOTE_COMMAND.TIMEOUT_TIME_MS ms
 		}
 		m_commandLock.lock();
 		m_commands.addElement(rc);
@@ -206,10 +214,10 @@ public class BluetoothCaptain extends Captain {
 			return false;
 		}
 		m_bSendingCommand=true;//set flag to indicate that a send is currently in progress
-		m_bFinishedDownloadingVideo = false;//always reset flag for downloaded image to false
-		m_nVideoChunkIndex =0;//reset video chunk index to zero
-		m_nNumImageBytes = 0;//make sure # of image byets is reset
-		m_nImageBytesOffset = 0;
+		m_bFinishedDownloadingLargeChunk = false;//always reset flag for downloaded image to false
+		m_nDownloadingChunkIndex =0;//reset video chunk index to zero
+		m_nNumLargeBlockBytes = 0;//make sure # of image byets is reset
+		m_nLargeBytesOffset = 0;
 		m_pBoatData = null;//reset boat data object
 		if (m_characteristic==null) {
 			if (!GetCharacteristic()) {
@@ -219,6 +227,14 @@ public class BluetoothCaptain extends Captain {
 			}
 			return false;//can't actually do write yet, need to wait for service and characteristic to be discovered
 		}
+		//delay for 100 ms (helps to make sure that any previous operation has been fully completed before attempting to send --> probably not the "right" way to do this)
+		try {
+			Thread.sleep(100);
+		}
+		catch (Exception e) {
+			//do nothing
+		}
+
 		if (!m_bluetoothGatt.beginReliableWrite()) {
 			//Util.PopupMsg(m_context, R.string.error_initializing_write);
 			Log.d("debug","error initializing write.\n");
@@ -226,12 +242,11 @@ public class BluetoothCaptain extends Captain {
 		}
 		//send command bytes
 		byte[] commandBytes = null;
-		int nNumToWrite = 0;
+		int nNumToWrite = 4;
 		if (rc.nNumDataBytes>0) {
 			nNumToWrite = Math.min(MAXBYTES_TO_WRITE,4+4+rc.nNumDataBytes);
-			commandBytes = new byte[nNumToWrite];
 		}
-		else commandBytes = new byte[4];
+		commandBytes = new byte[nNumToWrite];
 		int nNumDataBytes = nNumToWrite - 8;//the number of bytes being sent that are data bytes
 		commandBytes[0] = (byte) ((rc.nCommand & 0xff000000) >> 24);
 		commandBytes[1] = (byte) ((rc.nCommand & 0x00ff0000) >> 16);
@@ -251,11 +266,13 @@ public class BluetoothCaptain extends Captain {
 			return false;
 		}
 		if (!m_bluetoothGatt.writeCharacteristic(m_characteristic)) {
-			Log.d("debug", "error sending command bytes.\n");
+			String sError = String.format("error sending %d command bytes, command bytes = %d, %d, %d, %d.\n", nNumToWrite, commandBytes[0], commandBytes[1], commandBytes[2], commandBytes[3]);
+			Log.d("debug", sError);
 			return false;
 		}
 		if (nNumDataBytes>0&&nNumDataBytes<rc.nNumDataBytes) {
 			//there are other data bytes that need to be sent, save them and send them later
+			Log.d("debug", "Save and send other bytes later.\n");
 			int nNumExtraBytes = rc.nNumDataBytes - nNumDataBytes;
 			m_extraDataBytes = new byte[nNumExtraBytes];
 			for (int i=0;i<nNumExtraBytes;i++) {
@@ -263,7 +280,8 @@ public class BluetoothCaptain extends Captain {
 			}
 		}
 		else m_extraDataBytes = null;
-		//now need to wait for confirmation that bytes were successfully sent...
+		String sOK = String.format("wrote %d bytes ok.\n", nNumToWrite);
+		Log.d("debug", sOK);
 		return true;
 	}
 
@@ -273,7 +291,7 @@ public class BluetoothCaptain extends Captain {
 		}
 		//need to discover what services are available
 		if (!m_bluetoothGatt.discoverServices()) {
-			Util.PopupMsg(m_context,R.string.error_discovering_services);
+			//Util.PopupMsg(m_context,R.string.error_discovering_services);
 			return false;
 		}
 		return true;
@@ -295,6 +313,14 @@ public class BluetoothCaptain extends Captain {
 				//also need to set the client characteristic configuration descriptor 0x2902
 				UUID uuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
 				BluetoothGattDescriptor descriptor = m_characteristic.getDescriptor(uuid);
+				//test
+				byte []testBytes = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE;
+				int nNumTestBytes = testBytes.length;
+				for (int i=0;i<nNumTestBytes;i++) {
+				    String sTest = String.format("testByte[%d] = %d\n",i,(int)testBytes[i]);
+				    Log.d("debug",sTest);
+                }
+				//end test
 				descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
 				gatt.writeDescriptor(descriptor);
 				m_commandLock.lock();
@@ -316,9 +342,13 @@ public class BluetoothCaptain extends Captain {
 		//}
 	}
 
-	public boolean DataRead(byte []readBytes) {//check data from Bluetooth low energy (BLE) device (return true if successful (data is ok), false otherwise)
+	public boolean DataRead
+			(byte []readBytes) {//check data from Bluetooth low energy (BLE) device (return true if successful (data is ok), false otherwise)
 		if (readBytes==null) return false;
 		m_commandLock.lock();
+		//test
+		Log.d("debug", "received some BT data.\n");
+		//end test
 		if (m_commands.size()<=0) {
 			Log.d("debug","received some unexpected data.\n");
 			m_commandLock.unlock();
@@ -336,38 +366,40 @@ public class BluetoothCaptain extends Captain {
 			m_commandLock.unlock();
 			return false;
 		}
-		m_readBytes = FilterOutAMOSCommands(m_readBytes);
+		/*m_readBytes = FilterOutAMOSCommands(m_readBytes);
 		if (m_readBytes==null) {
 			m_commandLock.unlock();
 			return false;
-		}
+		}*/
 		LARGE_DATA_PACKET largeDataPacket = LARGE_DATA_PACKET.LookForValidLargeDataPacket(m_readBytes, m_nLargeDataIndex);
 		if (largeDataPacket!=null) {
 			if (largeDataPacket.isValid()) {
 				//a valid large data packet has been detected in the incoming data
 				//reformat last part of m_readBytes buffer to include the data bytes from this large data packet
 				int nLargeDataChunkIndex = largeDataPacket.GetChunkIndex();
-				if (nLargeDataChunkIndex>=m_nVideoChunkIndex) {
+				if (nLargeDataChunkIndex>=m_nDownloadingChunkIndex) {
 					m_readBytes = largeDataPacket.appendBytesTo(m_readBytes, m_nLargeDataIndex);
 					m_nLargeDataIndex = m_readBytes.length;
-					int nNumDownloaded = this.GetNumVideoBytesDownloaded();
+					int nNumDownloaded = this.GetNumLargeChunkBytesDownloaded();
 					//test
-					String sDownloaded = String.format("downloaded %d of %d bytes\n",nNumDownloaded,m_nNumImageBytes);
+					String sDownloaded = String.format("downloaded %d of %d bytes\n",nNumDownloaded,m_nNumLargeBlockBytes);
 					Log.d("debug",sDownloaded);
 					//end test
 					//test
-					String sVidChunkIndex = String.format("m_nVideoChunkIndex = %d\n",m_nVideoChunkIndex);
-					Log.d("debug",sVidChunkIndex);
+					String sDataChunkIndex = String.format("m_nDownloadingChunkIndex = %d\n",m_nDownloadingChunkIndex);
+					Log.d("debug",sDataChunkIndex);
 					//end test
-					m_nVideoChunkIndex++;
-					if (nNumDownloaded>=m_nNumImageBytes) {
-						this.m_bFinishedDownloadingVideo = true;
+					m_nDownloadingChunkIndex++;
+					if (nNumDownloaded>=m_nNumLargeBlockBytes) {
+						this.m_bFinishedDownloadingLargeChunk = true;
 						//send confirmation (2 crc bytes) back to AMOS to indicate that large data packet was received
 						//test
 						Log.d("debug","sending confirmation\n");
 						//end test
-						this.SendVideoDoneChunk(largeDataPacket);
-						//everything must have worked out ok, so now remove this command from the list
+						//save packet type that was downloaded
+						m_nLargePacketTypeDownloaded = m_commands.firstElement().nCommand;
+						this.SendLargePacketDoneChunk(largeDataPacket);
+ 						//everything must have worked out ok, so now remove this command from the list
 						m_commands.removeElementAt(0);
 						m_bSendingCommand = false;
 						m_commandLock.unlock();
@@ -379,8 +411,9 @@ public class BluetoothCaptain extends Captain {
 					//test
 					Log.d("debug","re-downloaded large data packet\n");
 					//end test
-					this.SendVideoDoneChunk(largeDataPacket);
+					this.SendLargePacketDoneChunk(largeDataPacket);
 					m_readBytes = largeDataPacket.RemoveLastPartialChunk(m_readBytes, m_nLargeDataIndex);//remove all data from m_nLargeDataIndex on
+					m_nLargeDataIndex = m_readBytes.length;
 					m_commandLock.unlock();
 					return false;
 				}
@@ -388,15 +421,15 @@ public class BluetoothCaptain extends Captain {
 				//test
 				Log.d("debug","sending confirmation\n");
 				//end test
-				if (!this.SendVideoDoneChunk(largeDataPacket)) {
+				if (!this.SendLargePacketDoneChunk(largeDataPacket)) {
 					//try again
-					if (!this.SendVideoDoneChunk(largeDataPacket)) {
+					if (!this.SendLargePacketDoneChunk(largeDataPacket)) {
 						//try one last time
-						if (!this.SendVideoDoneChunk(largeDataPacket)) {
+						if (!this.SendLargePacketDoneChunk(largeDataPacket)) {
 							//can't send out data for some reason, cancel downloading of image
 							m_commands.removeElementAt(0);
 							m_bSendingCommand = false;
-							m_nNumImageBytes = 0;
+							m_nNumLargeBlockBytes = 0;
 							m_readBytes = null;
 							m_commandLock.unlock();
 							return false;
@@ -409,8 +442,8 @@ public class BluetoothCaptain extends Captain {
 				Log.d("debug","garbled data packet\n");
 				//end test
 				m_readBytes = largeDataPacket.RemoveLastPartialChunk(m_readBytes, m_nLargeDataIndex);
-				//just send a single zero byte (0x00) to indicate that an error occurred
-				this.SendVideoError();
+				//send bytes to indicate that an error occurred
+				this.SendLargePacketError();
 				m_commandLock.unlock();
 				return false;
 			}
@@ -523,20 +556,20 @@ public class BluetoothCaptain extends Captain {
 		}
 		//special case for video capture frame
 		boolean bSkipProcessData=false;
-		if (pBoatData.nPacketType==REMOTE_COMMAND.VIDEO_DATA_PACKET) {
+		if (BluetoothCaptain.IsLargePacketType(pBoatData.nPacketType)) {//==REMOTE_COMMAND.VIDEO_DATA_PACKET) {
 			bSkipProcessData=true;
-			if (m_nNumImageBytes==0) {
-				m_nNumImageBytes = Util.toInt(pBoatData.dataBytes);
-				m_nImageBytesOffset = 12 + pBoatData.nDataSize + 1;
-				m_nLargeDataIndex = m_nImageBytesOffset;
+			if (m_nNumLargeBlockBytes==0) {
+				m_nNumLargeBlockBytes = Util.toInt(pBoatData.dataBytes);
+				m_nLargeBytesOffset = 12 + pBoatData.nDataSize + 1;
+				m_nLargeDataIndex = m_nLargeBytesOffset;
 				//make sure image is not super large
-				if (m_nNumImageBytes >= 10000000) {
-					String sErrorMsg = String.format("Number of image bytes is too large: %d\n", m_nNumImageBytes);
+				if (m_nNumLargeBlockBytes >= 10000000) {
+					String sErrorMsg = String.format("Number of image bytes is too large: %d\n", m_nNumLargeBlockBytes);
 					Log.d("debug", sErrorMsg);
 					m_bSendingCommand = false;
-					m_nImageBytesOffset = 0;
+					m_nLargeBytesOffset = 0;
 					m_nLargeDataIndex = 0;
-					m_nNumImageBytes = 0;
+					m_nNumLargeBlockBytes = 0;
 					m_readBytes = null;
 				}
 				m_commandLock.unlock();
@@ -546,9 +579,9 @@ public class BluetoothCaptain extends Captain {
 
 		int nNumBytesToReceive = pBoatData.nDataSize + 1;
 		int nNumBytesRemaining = nNumBytesRead - 12;
-		if (m_nImageBytesOffset>0) {
-			nNumBytesToReceive+=m_nNumImageBytes;
-			nNumBytesRemaining = nNumBytesRead - m_nImageBytesOffset;
+		if (m_nLargeBytesOffset>0) {
+			nNumBytesToReceive+=m_nNumLargeBlockBytes;
+			nNumBytesRemaining = nNumBytesRead - m_nLargeBytesOffset;
 		}
 
 		if (nNumBytesRemaining<nNumBytesToReceive) {
@@ -565,13 +598,13 @@ public class BluetoothCaptain extends Captain {
 			m_pBoatData=null;//no vaoid data returned from boat
 			m_readBytes=null;
 			Log.d("debug","no valid data returned from boat\n");
-			m_nNumImageBytes = 0;
+			m_nNumLargeBlockBytes = 0;
 			m_commandLock.unlock();
 			return false;
 		}
-		if (pBoatData.nPacketType==REMOTE_COMMAND.VIDEO_DATA_PACKET) {
+		if (BluetoothCaptain.IsLargePacketType(pBoatData.nPacketType)) {
 			m_commandLock.unlock();
-			return false;//should be near end of video image if we get here, probably need just one additional BLE packet
+			return false;//should be near end of large data packet transmission if we get here, probably need just one additional BLE packet
 		}
 		//ProcessBoatData(pBoatData);
 		m_pBoatData = pBoatData;
@@ -579,10 +612,11 @@ public class BluetoothCaptain extends Captain {
 		m_commands.removeElementAt(0);
 		m_commandLock.unlock();
 		m_bSendingCommand = false;
-		m_nNumImageBytes = 0;
-		if (m_pBoatData.nPacketType!=REMOTE_COMMAND.VIDEO_DATA_PACKET) {
+		m_nNumLargeBlockBytes = 0;
+		if (!BluetoothCaptain.IsLargePacketType(m_pBoatData.nPacketType)) {
 			m_readBytes = null;
 		}
+		Log.d("debug","Parsed boat data ok.\n");
 		return true;
 	}
 
@@ -590,7 +624,7 @@ public class BluetoothCaptain extends Captain {
 	 * SentDone: call this function after bytes have been sent out, when it is time to start reading in the response from AMOS
 	 */
 	public void SentDone() {
-		//if (this.isReadingVideoData()) {
+		//if (this.isReadingLargeChunkData()) {
 		//	return;//reading in image data, don't need to keep reading characteristic
 		//}
 		if (this.m_extraDataBytes!=null) {
@@ -815,11 +849,11 @@ public class BluetoothCaptain extends Captain {
 
 
 	/**
-	 * Check to see if video data is currently being read from AMOS.
+	 * Check to see if a large chunk of data is currently being read from AMOS.
 	 *
-	 * @return true if video data is currently being read in, otherwise return false.
+	 * @return true if a large chunk of data is currently being read in, otherwise return false.
 	 */
-	public boolean isReadingVideoData() {
+	public boolean isReadingLargeChunkData() {
 		if (m_commands==null) {
 			return false;
 		}
@@ -830,7 +864,7 @@ public class BluetoothCaptain extends Captain {
 			return false;
 		}
 		REMOTE_COMMAND rc = m_commands.firstElement();
-		if (rc.nCommand!=REMOTE_COMMAND.VIDEO_DATA_PACKET) {//current command is not a video command
+		if (!BluetoothCaptain.IsLargePacketType(rc.nCommand)) {//current command is not a large chunk of data command
 			m_commandLock.unlock();
 			return false;
 		}
@@ -840,12 +874,12 @@ public class BluetoothCaptain extends Captain {
 
 
 	/**
-	 * SendVideoDoneChunk: send confirmation back to AMOS that a large chunk of video data has been successfully downloaded
+	 * SendLargePacketDoneChunk: send confirmation back to AMOS that a large chunk of data has been successfully downloaded
 	 * @param large_data_packet an object of type LARGE_DATA_PACKET that corresponds to the large packet of data that was just successfully downloaded
 	 *
 	 * @return true if completed successfully, otherwise false
 	 */
-	public boolean SendVideoDoneChunk(LARGE_DATA_PACKET large_data_packet) {
+	public boolean SendLargePacketDoneChunk(LARGE_DATA_PACKET large_data_packet) {
 		if (!m_bConnected) {
 			Log.d("debug","Error, not connected to HM-10.");
 			return false;
@@ -853,6 +887,7 @@ public class BluetoothCaptain extends Captain {
 		byte []bytes_to_send = new byte[4];
 		byte []crc_bytes = large_data_packet.GetCRCBytes();
 		if (crc_bytes==null) {
+			Log.d("debug","crc_bytes null.");
 			return false;
 		}
 		bytes_to_send[0] = 0;
@@ -862,8 +897,8 @@ public class BluetoothCaptain extends Captain {
 		if (m_characteristic==null) {
 			if (!GetCharacteristic()) {
 				Log.d("debug","Error, could not get characteristic.");
+				return false;
 			}
-			return false;
 		}
 		if (!m_bluetoothGatt.beginReliableWrite()) {
 			Log.d("debug","Error trying to begin reliable write.");
@@ -873,10 +908,14 @@ public class BluetoothCaptain extends Captain {
 			Log.d("debug","Error trying to set value of characteristic.");
 			return false;
 		}
+
 		if (!m_bluetoothGatt.writeCharacteristic(m_characteristic)) {
 			Log.d("debug","Error trying to write characteristic.");
-			return false;
+			//test
+			//return false;//appears to be some sort of driver problem on some devices, e.g. samsung SM-T290 used for testing sometimes returns false for the writeCharacteristic, even though the write appears to always happen. For now, need to just ignore the return value of the writeCharacteristic function.
+			//end test
 		}
+		//end test
 		//test
 		String sTest = String.format("crc0 = %d, crc1 = %d\n",(int)crc_bytes[0],(int)crc_bytes[1]);
 		Log.d("debug",sTest);
@@ -884,7 +923,7 @@ public class BluetoothCaptain extends Captain {
 		return true;
 	}
 
-	private void SendVideoError() {//send four 0xFF bytes back to AMOS to indicate that the last data packet got garbled somehow
+	private void SendLargePacketError() {//send four 0xFF bytes back to AMOS to indicate that the last data packet got garbled somehow
 		if (!m_bConnected) {
 			Log.d("debug","Error, not connected to HM-10.");
 		}
@@ -911,46 +950,46 @@ public class BluetoothCaptain extends Captain {
 	}
 
 	/**
-	 * Get the total number of video bytes that have been downloaded so far in the current request for an image capture. This function assumes that the download of image data is currently
-	 * in progress. The calling function should call {@link #isReadingVideoData()} first to make sure of this.
-	 * @return the total number of bytes downloaded so far in the current image capture request.
+	 * Get the total number of large chunk bytes that have been downloaded so far in the current request for a large chunk of data. This function assumes that the download of a large chunk of data is currently
+	 * in progress. The calling function should call {@link #isReadingLargeChunkData()} first to make sure of this.
+	 * @return the total number of bytes downloaded so far in the current large chunk download request.
 	 */
-	public int GetNumVideoBytesDownloaded() {
+	public int GetNumLargeChunkBytesDownloaded() {
 		if (m_readBytes==null) return 0;
-		int nNumDownloaded = m_nLargeDataIndex - m_nImageBytesOffset;
+		int nNumDownloaded = m_nLargeDataIndex - m_nLargeBytesOffset;
 		if (nNumDownloaded<0) nNumDownloaded = 0;
 		return nNumDownloaded;
 	}
 
 	/**
-	 * Get the bytes that correspond to the downloaded image.
-	 * @return an array of bytes that corresponds to the downloaded image.
+	 * Get the bytes that correspond to the downloaded large packet of data
+	 * @return an array of bytes that corresponds to the downloaded packet of data.
 	 */
-	byte [] GetImageBytes() {
-		if (this.m_nNumImageBytes<=0) return null;
-		byte [] retVal = new byte[m_nNumImageBytes];
+	byte [] GetLargeChunkBytes() {
+		if (this.m_nNumLargeBlockBytes<=0) return null;
+		byte [] retVal = new byte[m_nNumLargeBlockBytes];
 		int nNumBytesAvail = m_readBytes.length;
-		if (nNumBytesAvail<(m_nImageBytesOffset+m_nNumImageBytes)) {
+		if (nNumBytesAvail<(m_nLargeBytesOffset+m_nNumLargeBlockBytes)) {
 			return null;//not enough bytes were read in
 		}
-		for (int i=0;i<m_nNumImageBytes;i++) {
-			retVal[i] = m_readBytes[m_nImageBytesOffset+i];
+		for (int i=0;i<m_nNumLargeBlockBytes;i++) {
+			retVal[i] = m_readBytes[m_nLargeBytesOffset+i];
 		}
 		return retVal;
 	}
 
 	/**
-	 * Check to see if the download of a video image capture has completed.
-	 * @return true if we are finished downloading all of the bytes from a video image capture command
+	 * Check to see if the download of a large data chunk has completed.
+	 * @return true if we are finished downloading all of the bytes from a large data chunk
 	 */
-	public boolean isFinishedDownloadingVideo() {
-		return m_bFinishedDownloadingVideo;
+	public boolean isFinishedDownloadingLargeChunk() {
+		return m_bFinishedDownloadingLargeChunk;
 	}
 
 	/**
-	 * Call this function after the video image capture bytes have been completely downloaded and the image has been saved somewhere or displayed.
+	 * Call this function after the large chunk of data has been processed / used
 	 */
-	public void StopReadingVideoData() {
+	public void StopReadingLargeChunkData() {
 		m_pBoatData = null;
 		m_commandLock.lock();
 		if (m_commands.size()>0) {
@@ -961,7 +1000,7 @@ public class BluetoothCaptain extends Captain {
 		}
 		m_bSendingCommand = false;
 		m_readBytes = null;
-		m_nNumImageBytes = 0;
+		m_nNumLargeBlockBytes = 0;
 		m_commandLock.unlock();
 	}
 
@@ -969,10 +1008,10 @@ public class BluetoothCaptain extends Captain {
 		//data chunk in buf that occurs before the index nIndex, the return value of the function
 		//is the shortened version of the byte array buf
 		if (buf==null) return null;
-		if (nIndex<20||m_nImageBytesOffset==0) {//this function is currently only applicable for buffers of video image capture data
+		if (nIndex<20||m_nLargeBytesOffset==0) {//this function is currently only applicable for buffers of video image capture data
 			return buf;//don't do anything
 		}
-		int nNumPartialChunkBytes = (nIndex - m_nImageBytesOffset) % LARGEDATA_CHUNKSIZE;
+		int nNumPartialChunkBytes = (nIndex - m_nLargeBytesOffset) % LARGEDATA_CHUNKSIZE;
 		if (nNumPartialChunkBytes==0) {
 			nNumPartialChunkBytes = LARGEDATA_CHUNKSIZE;
 		}
@@ -1018,7 +1057,7 @@ public class BluetoothCaptain extends Captain {
 	private void TimeoutMethod() {
 		// This method is called directly by the timer
 		// and runs in the same thread as the timer.
-		//clear out any old commands that were sent more than REMOTE_COMMAND.ITMEOUT_TIME_MS ago
+		//clear out any old commands that were sent more than REMOTE_COMMAND.TIMEOUT_TIME_MS ago
 		boolean bCommandsRemoved = RemoveOldCommands();
 		m_commandLock.lock();
 		int nNumCommands = m_commands.size();
@@ -1050,10 +1089,29 @@ public class BluetoothCaptain extends Captain {
 		if (bCommandsRemoved) {
 			m_bSendingCommand=false;
 			this.m_readBytes=null;
-			m_nNumImageBytes = 0;
+			m_nNumLargeBlockBytes = 0;
 		}
 		m_commandLock.unlock();
 		return bCommandsRemoved;
+	}
+
+	private void RemovePreviousThrustCommands() {//remove any REMOTE_COMMAND.THRUST_ON commands that are currently in the queue
+		m_commandLock.lock();
+		int nNumCommands = m_commands.size();
+		boolean bCommandsRemoved = false;
+		for (int i=0;i<nNumCommands;i++) {
+			if (m_commands.firstElement().nCommand==REMOTE_COMMAND.THRUST_ON) {
+				m_commands.removeElementAt(0);
+				bCommandsRemoved = true;
+			}
+		}
+		nNumCommands = m_commands.size();
+		if (bCommandsRemoved) {
+			m_bSendingCommand=false;
+			this.m_readBytes=null;
+			m_nNumLargeBlockBytes = 0;
+		}
+		m_commandLock.unlock();
 	}
 
 	private void SendExtraDataBytes() {//send out extra data bytes
@@ -1066,6 +1124,15 @@ public class BluetoothCaptain extends Captain {
 			m_extraDataBytes = null;
 			return;
 		}
+
+		//delay for 100 ms (helps to make sure that any previous operation has been fully completed before attempting to send --> probably not the "right" way to do this)
+		try {
+			Thread.sleep(1000);
+		}
+		catch (Exception e) {
+			//do nothing
+		}
+
 		if (!m_bluetoothGatt.beginReliableWrite()) {
 			//Util.PopupMsg(m_context, R.string.error_initializing_write);
 			Log.d("debug","error initializing write.\n");
@@ -1084,10 +1151,15 @@ public class BluetoothCaptain extends Captain {
 			return;
 		}
 		if (!m_bluetoothGatt.writeCharacteristic(m_characteristic)) {
-			Log.d("debug", "error sending command bytes.\n");
+			String sError = String.format("error sending %d data bytes.\n",nNumToWrite);
+			Log.d("debug", sError);
 			m_extraDataBytes = null;
 			return;
 		}
+		//test
+		String sTest = String.format("Wrote %d extra bytes.\n",nNumToWrite);
+		Log.d("debug",sTest);
+		//end test
 		if (nNumToWrite<m_extraDataBytes.length) {
 			//there are other data bytes that need to be sent, save them and send them later
 			int nNumExtraBytes = m_extraDataBytes.length - nNumToWrite;
@@ -1098,7 +1170,45 @@ public class BluetoothCaptain extends Captain {
 			m_extraDataBytes = extraDataBytes;
 		}
 		else m_extraDataBytes = null;
-		//now need to wait for confirmation that bytes were successfully sent...
+	}
+
+	public void GetRemoteDataFiles() {
+		//send command to request the names of the remote data files available on AMOS
+		REMOTE_COMMAND rc = new REMOTE_COMMAND();
+		rc.nCommand = REMOTE_COMMAND.LIST_REMOTE_DATA;
+		rc.nNumDataBytes = 0;
+		rc.pDataBytes = null;
+		AddCommand(rc);
+	}
+
+	public static boolean IsLargePacketType(int nPacketType) {
+		if (nPacketType==REMOTE_COMMAND.LIST_REMOTE_DATA||nPacketType==REMOTE_COMMAND.LIST_REMOTE_IMAGE||
+		nPacketType==REMOTE_COMMAND.LIST_REMOTE_LOG||nPacketType==REMOTE_COMMAND.LIST_REMOTE_SCRIPTS||
+		nPacketType==REMOTE_COMMAND.VIDEO_DATA_PACKET) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * makes a request to download a remote filename from AMOS
+	 * @param sRemoteFilename the path of the remote filename to download
+	 * @return true if the request for the remote file was successfully made, otherwise false
+	 */
+	public boolean RequestRemoteFile(String sRemoteFilename) {
+		REMOTE_COMMAND rc = super.CreateRemoteFileCommand(sRemoteFilename);
+		if (rc==null) {
+			return false;
+		}
+		//use m_extraDataBytes to hold the text of the remote filename
+		AddCommand(rc);
+		m_extraDataBytes = sRemoteFilename.getBytes();
+		m_commandLock.lock();
+		while (m_extraDataBytes!=null) {
+			SendExtraDataBytes();
+		}
+		m_commandLock.unlock();
+		return true;
 	}
 }
 
